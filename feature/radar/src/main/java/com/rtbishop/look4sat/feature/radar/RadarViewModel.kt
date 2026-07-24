@@ -203,7 +203,8 @@ class RadarViewModel(
                             ctcssTone = svc.ctcssTone,
                             isTracking = svc.isActive,
                             selectedTransponderUuid = svc.selectedTransponder?.uuid,
-                            errorMessage = svc.errorMessage
+                            errorMessage = svc.errorMessage,
+                            radioModel = settingsRepo.radioControlSettings.value.radioModel
                         )
                     )
                 }
@@ -236,15 +237,35 @@ class RadarViewModel(
             RadarAction.ToggleTracking -> {
                 val svc = trackingService.state.value
                 if (svc.isActive) {
-                    trackingService.stopTracking()
+                    viewModelScope.launch {
+                        trackingService.stopTracking()
+                        trackingService.disconnectRadios()
+                    }
                 } else {
                     val pass = _uiState.value.currentPass ?: return
                     val transponder = svc.selectedTransponder ?: return
                     trackingService.startTracking(pass, transponder, svc.txBaseFrequencyHz)
                 }
             }
-            RadarAction.ConnectRadios -> viewModelScope.launch { trackingService.connectRadios() }
-            RadarAction.DisconnectRadios -> viewModelScope.launch { trackingService.disconnectRadios() }
+            RadarAction.ConnectAndTrack -> viewModelScope.launch {
+                // Set connecting state
+                _uiState.update { it.copy(radioControl = it.radioControl.copy(isConnecting = true)) }
+
+                trackingService.connectRadios()
+                // Wait a bit for connection to establish
+                delay(500)
+                val svc = trackingService.state.value
+                if (svc.txConnected || svc.rxConnected) {
+                    val pass = _uiState.value.currentPass
+                    val transponder = svc.selectedTransponder
+                    if (pass != null && transponder != null) {
+                        trackingService.startTracking(pass, transponder, svc.txBaseFrequencyHz)
+                    }
+                }
+
+                // Clear connecting state
+                _uiState.update { it.copy(radioControl = it.radioControl.copy(isConnecting = false)) }
+            }
 
             // SSTV actions
             is RadarAction.SstvPermissionResult -> {

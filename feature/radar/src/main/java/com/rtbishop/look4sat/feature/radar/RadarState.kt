@@ -38,7 +38,9 @@ data class RadioControlSubState(
     val txBaseFrequencyHz: Long? = null,
     val ctcssTone: Double? = null,
     val isTracking: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val radioModel: String? = null,
+    val isConnecting: Boolean = false
 )
 
 data class TransceiverSubState(
@@ -84,8 +86,7 @@ sealed interface RadarAction {
     data class AdjustTxFrequency(val deltaHz: Long) : RadarAction
     data class SetCtcssTone(val toneHz: Double?) : RadarAction
     data object ToggleTracking : RadarAction
-    data object ConnectRadios : RadarAction
-    data object DisconnectRadios : RadarAction
+    data object ConnectAndTrack : RadarAction
 
     // SSTV actions
     data object SstvStartRecording : RadarAction

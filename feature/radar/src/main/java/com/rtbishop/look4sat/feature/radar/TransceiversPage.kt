@@ -406,24 +406,24 @@ private fun ExpandedRadioControl(
         }
 
         // Control buttons
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (!radioControl.txPanel.isConnected && !radioControl.rxPanel.isConnected) {
-                CardButton(
-                    onClick = { onAction(RadarAction.ConnectRadios) },
-                    text = "Connect",
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                CardButton(
-                    onClick = { onAction(RadarAction.DisconnectRadios) },
-                    text = "Disconnect",
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        val isTracking = radioControl.isTracking
+        val isConnecting = radioControl.isConnecting
+
+        if (!isTracking) {
+            // Not tracking: show "Connect to <device> and track" or "Connecting..."
+            val deviceName = radioControl.radioModel ?: "radio"
+            val buttonText = if (isConnecting) "Connecting..." else "Connect to $deviceName and track"
+            CardButton(
+                onClick = { if (!isConnecting) onAction(RadarAction.ConnectAndTrack) },
+                text = buttonText,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            // Tracking: show stop button
             CardButton(
                 onClick = { onAction(RadarAction.ToggleTracking) },
-                text = if (radioControl.isTracking) "Stop" else "Track",
-                modifier = Modifier.weight(1f)
+                text = "Stop tracking and disconnect",
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
