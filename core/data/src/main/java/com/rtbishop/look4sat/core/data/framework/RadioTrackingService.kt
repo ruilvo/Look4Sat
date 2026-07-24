@@ -93,7 +93,7 @@ class RadioTrackingService(
         rxController = rx
 
         _state.update { it.copy(errorMessage = null) }
-        
+
         // IC-705 split mode: single radio handles both VFOs
         if (canUseSplit && txAddr.isNotBlank()) {
             val txOk = tx.connect()
@@ -159,7 +159,7 @@ class RadioTrackingService(
             val useSplit = rcSettings.useSplitMode
             val isIcom705 = rcSettings.radioModel == "Icom IC-705"
             val canUseSplit = isIcom705 && useSplit
-            
+
             val txMode = transponder.uplinkMode
             val rxMode = transponder.downlinkMode
                 ?: transponder.uplinkMode?.let {
@@ -174,100 +174,12 @@ class RadioTrackingService(
                 transponder.downlinkLow
             }
 
-            // Initialize radios based on mode
             if (canUseSplit && tx != null && tx.isConnected) {
-                // Single-radio split mode: set band and mode on both VFOs, then enable split
-                Log.i(tag, "Configuring single-radio split mode")
-                
-                // Disable split temporarily for setup
-                tx.setSplit(false)
-                delay(vfoSwitchDelayMs)
-
-                // Set VFO-A for RX: frequency first (to set band), then mode
-                tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(vfoSwitchDelayMs)
-                if (initialRxBaseFreq != null) {
-                    tx.setFrequency(initialRxBaseFreq)
-                    delay(vfoSwitchDelayMs)
-                    Log.i(tag, "VFO-A (RX) frequency set to $initialRxBaseFreq Hz")
-                }
-                if (rxMode != null) {
-                    tx.setMode(rxMode)
-                    delay(vfoSwitchDelayMs)
-                    Log.i(tag, "VFO-A (RX) mode set to $rxMode")
-                }
-
-                // Set VFO-B for TX: frequency first (to set band), then mode
-                tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(vfoSwitchDelayMs)
-                if (initialTxBaseFreq != null) {
-                    tx.setFrequency(initialTxBaseFreq)
-                    delay(vfoSwitchDelayMs)
-                    Log.i(tag, "VFO-B (TX) frequency set to $initialTxBaseFreq Hz")
-                }
-                if (txMode != null) {
-                    tx.setMode(txMode)
-                    delay(vfoSwitchDelayMs)
-                    Log.i(tag, "VFO-B (TX) mode set to $txMode")
-                }
-
-                // Set CTCSS on VFO-B if FM
-                if (txMode?.uppercase() == "FM") {
-                    _state.value.ctcssTone?.let { tone ->
-                        tx.setCtcssTone(tone)
-                        delay(ctcssDelayMs)
-                        tx.setCtcssMode(true)
-                        delay(ctcssDelayMs)
-                        Log.i(tag, "CTCSS tone set on VFO-B")
-                    }
-                }
-
-                // Return to VFO-A (RX) and enable split operation
-                tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(vfoSwitchDelayMs)
-                tx.setSplit(true)
-                delay(vfoSwitchDelayMs)
-                Log.i(tag, "Split mode enabled, ready for tracking")
+                initializeSplitModeRadios(tx, initialTxBaseFreq, initialRxBaseFreq, txMode, rxMode)
             } else {
-                // Dual radio mode - set band and mode on both radios
-                Log.i(tag, "Configuring dual-radio mode")
-                
-                if (tx != null && tx.isConnected) {
-                    if (initialTxBaseFreq != null) {
-                        tx.setFrequency(initialTxBaseFreq)
-                        delay(frequencySetDelayMs)
-                        Log.i(tag, "TX frequency set to $initialTxBaseFreq Hz")
-                    }
-                    if (txMode != null) {
-                        tx.setMode(txMode)
-                        delay(frequencySetDelayMs)
-                        Log.i(tag, "TX mode set to $txMode")
-                    }
-                    // Set CTCSS if FM
-                    if (txMode?.uppercase() == "FM") {
-                        _state.value.ctcssTone?.let { tone ->
-                            tx.setCtcssTone(tone)
-                            delay(ctcssDelayMs)
-                            tx.setCtcssMode(true)
-                            delay(ctcssDelayMs)
-                            Log.i(tag, "CTCSS tone set on TX radio")
-                        }
-                    }
-                }
-                if (rx != null && rx.isConnected) {
-                    if (initialRxBaseFreq != null) {
-                        rx.setFrequency(initialRxBaseFreq)
-                        delay(frequencySetDelayMs)
-                        Log.i(tag, "RX frequency set to $initialRxBaseFreq Hz")
-                    }
-                    if (rxMode != null) {
-                        rx.setMode(rxMode)
-                        delay(frequencySetDelayMs)
-                        Log.i(tag, "RX mode set to $rxMode")
-                    }
-                }
+                initializeDualRadioRadios(tx, rx, initialTxBaseFreq, initialRxBaseFreq, txMode, rxMode)
             }
-            
+
             _state.update { it.copy(txMode = txMode, rxMode = rxMode) }
 
             // Start appropriate tracking loop based on mode
@@ -279,9 +191,110 @@ class RadioTrackingService(
         }
     }
 
+    private suspend fun initializeSplitModeRadios(
+        radio: IRadioController,
+        txBaseFreq: Long?,
+        rxBaseFreq: Long?,
+        txMode: String?,
+        rxMode: String?
+    ) {
+        Log.i(tag, "Configuring single-radio split mode")
+
+        radio.setSplit(false)
+        delay(vfoSwitchDelayMs)
+
+        radio.setVfo(IRadioController.Vfo.VFO_A)
+        delay(vfoSwitchDelayMs)
+        rxBaseFreq?.let {
+            radio.setFrequency(it)
+            delay(vfoSwitchDelayMs)
+            Log.i(tag, "VFO-A (RX) frequency set to $it Hz")
+        }
+        rxMode?.let {
+            radio.setMode(it)
+            delay(vfoSwitchDelayMs)
+            Log.i(tag, "VFO-A (RX) mode set to $it")
+        }
+
+        radio.setVfo(IRadioController.Vfo.VFO_B)
+        delay(vfoSwitchDelayMs)
+        txBaseFreq?.let {
+            radio.setFrequency(it)
+            delay(vfoSwitchDelayMs)
+            Log.i(tag, "VFO-B (TX) frequency set to $it Hz")
+        }
+        txMode?.let {
+            radio.setMode(it)
+            delay(vfoSwitchDelayMs)
+            Log.i(tag, "VFO-B (TX) mode set to $it")
+        }
+
+        if (txMode?.uppercase() == "FM") {
+            _state.value.ctcssTone?.let { tone ->
+                radio.setCtcssTone(tone)
+                delay(ctcssDelayMs)
+                radio.setCtcssMode(true)
+                delay(ctcssDelayMs)
+                Log.i(tag, "CTCSS tone set on VFO-B")
+            }
+        }
+
+        radio.setVfo(IRadioController.Vfo.VFO_A)
+        delay(vfoSwitchDelayMs)
+        radio.setSplit(true)
+        delay(vfoSwitchDelayMs)
+        Log.i(tag, "Split mode enabled, ready for tracking")
+    }
+
+    private suspend fun initializeDualRadioRadios(
+        txRadio: IRadioController?,
+        rxRadio: IRadioController?,
+        txBaseFreq: Long?,
+        rxBaseFreq: Long?,
+        txMode: String?,
+        rxMode: String?
+    ) {
+        Log.i(tag, "Configuring dual-radio mode")
+
+        if (txRadio != null && txRadio.isConnected) {
+            txBaseFreq?.let {
+                txRadio.setFrequency(it)
+                delay(frequencySetDelayMs)
+                Log.i(tag, "TX frequency set to $it Hz")
+            }
+            txMode?.let {
+                txRadio.setMode(it)
+                delay(frequencySetDelayMs)
+                Log.i(tag, "TX mode set to $it")
+            }
+            if (txMode?.uppercase() == "FM") {
+                _state.value.ctcssTone?.let { tone ->
+                    txRadio.setCtcssTone(tone)
+                    delay(ctcssDelayMs)
+                    txRadio.setCtcssMode(true)
+                    delay(ctcssDelayMs)
+                    Log.i(tag, "CTCSS tone set on TX radio")
+                }
+            }
+        }
+
+        if (rxRadio != null && rxRadio.isConnected) {
+            rxBaseFreq?.let {
+                rxRadio.setFrequency(it)
+                delay(frequencySetDelayMs)
+                Log.i(tag, "RX frequency set to $it Hz")
+            }
+            rxMode?.let {
+                rxRadio.setMode(it)
+                delay(frequencySetDelayMs)
+                Log.i(tag, "RX mode set to $it")
+            }
+        }
+    }
+
     private suspend fun runSplitModeTracking(radio: IRadioController?) {
         if (radio == null || !radio.isConnected || radio !is Ic705Controller) return
-        
+
         while (coroutineContext.isActive) {
             val currentState = _state.value
             if (!currentState.isActive) break
@@ -305,7 +318,7 @@ class RadioTrackingService(
 
             // Read which VFO is currently active
             val currentVfo = radio.readCurrentVfo()
-            
+
             // Update frequency on the currently active VFO only
             when (currentVfo) {
                 IRadioController.Vfo.VFO_A -> {
