@@ -508,7 +508,10 @@ fun RadioControlDialog(
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                 color = androidx.compose.material3.MaterialTheme.colorScheme.primary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 RadioControlSettings.SUPPORTED_RADIOS.forEach { model ->
                     androidx.compose.material3.FilterChip(
                         selected = radioModel.value == model,
@@ -615,13 +618,13 @@ fun RadioControlDialog(
                 Spacer(modifier = Modifier.height(6.dp))
             }
 
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Column {
                 Text("Baud Rate:")
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     baudRates.forEach { rate ->
                         CardButton(
                             onClick = { baudRate.intValue = rate },

@@ -90,6 +90,7 @@ class Ic705Controller(
 
     override suspend fun setFrequency(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
+            Log.d(tag, "Setting frequency to $frequencyHz Hz")
             sendCommandWithResponse(
                 Ic705CatProtocol.buildSetFreqCommand(frequencyHz),
                 Ic705CatProtocol.CMD_SET_FREQ
@@ -99,15 +100,18 @@ class Ic705Controller(
 
     override suspend fun setFrequencyToCurrentVfo(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
+            Log.d(tag, "Setting frequency to current VFO: $frequencyHz Hz")
+            // Use command 0x00 which sets frequency to the currently selected VFO
             sendCommandWithResponse(
-                Ic705CatProtocol.buildSetFreqToCurrentVfoCommand(frequencyHz),
-                Ic705CatProtocol.CMD_SET_FREQ_TO_VFO
+                Ic705CatProtocol.buildSetFreqCommand(frequencyHz),
+                Ic705CatProtocol.CMD_SET_FREQ
             )
         }
     }
 
     override suspend fun setMode(mode: String): Boolean = withContext(Dispatchers.IO) {
         val cmd = Ic705CatProtocol.buildSetModeCommand(mode) ?: return@withContext false
+        Log.d(tag, "Setting mode to $mode")
         ioMutex.withLock {
             sendCommandWithResponse(cmd, Ic705CatProtocol.CMD_SET_MODE)
         }
@@ -116,10 +120,12 @@ class Ic705Controller(
     override suspend fun setCtcssMode(enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
         // IC-705 handles CTCSS differently - enabling tone automatically enables encode
         // This is a no-op for Icom, tone setting is sufficient
+        Log.d(tag, "CTCSS mode ${if (enabled) "enabled" else "disabled"} (handled by tone setting)")
         true
     }
 
     override suspend fun setCtcssTone(toneHz: Double): Boolean = withContext(Dispatchers.IO) {
+        Log.d(tag, "Setting CTCSS tone to $toneHz Hz")
         ioMutex.withLock {
             sendCommandWithResponse(
                 Ic705CatProtocol.buildSetCtcssToneCommand(toneHz),
@@ -131,18 +137,22 @@ class Ic705Controller(
     override suspend fun readFrequencyAndMode(): Pair<Long, String>? = withContext(Dispatchers.IO) {
         ioMutex.withLock {
             // Read frequency
+            Log.d(tag, "Reading frequency")
             val freqCmd = Ic705CatProtocol.buildReadFreqCommand()
             if (!sendCommand(freqCmd)) return@withContext null
             val freqResponse = readResponseWithTimeout(Ic705CatProtocol.CMD_READ_FREQ)
             val frequency = freqResponse?.let { Ic705CatProtocol.parseReadFreqResponse(it) }
                 ?: return@withContext null
+            Log.d(tag, "Read frequency: $frequency Hz")
 
             // Read mode
+            Log.d(tag, "Reading mode")
             val modeCmd = Ic705CatProtocol.buildReadModeCommand()
             if (!sendCommand(modeCmd)) return@withContext null
             val modeResponse = readResponseWithTimeout(Ic705CatProtocol.CMD_READ_MODE)
             val mode = modeResponse?.let { Ic705CatProtocol.parseReadModeResponse(it) }
                 ?: return@withContext null
+            Log.d(tag, "Read mode: $mode")
 
             Pair(frequency, mode)
         }
@@ -153,23 +163,28 @@ class Ic705Controller(
             val cmd = Ic705CatProtocol.buildReadPttCommand()
             if (!sendCommand(cmd)) return@withContext null
             val response = readResponseWithTimeout(Ic705CatProtocol.CMD_PTT)
-            response?.let { Ic705CatProtocol.parsePttStatusResponse(it) }
+            val pttStatus = response?.let { Ic705CatProtocol.parsePttStatusResponse(it) }
+            Log.d(tag, "PTT status: ${if (pttStatus == true) "ON" else "OFF"}")
+            pttStatus
         }
     }
 
     override suspend fun pttOn(): Boolean = withContext(Dispatchers.IO) {
+        Log.d(tag, "Setting PTT ON (not implemented)")
         // PTT control not typically used in satellite tracking
         // IC-705 uses 0x1C 0x00 0x01 for PTT ON
         false
     }
 
     override suspend fun pttOff(): Boolean = withContext(Dispatchers.IO) {
+        Log.d(tag, "Setting PTT OFF (not implemented)")
         // PTT control not typically used in satellite tracking
         // IC-705 uses 0x1C 0x00 0x00 for PTT OFF
         false
     }
 
     suspend fun setSplit(enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
+        Log.d(tag, "Setting split mode ${if (enabled) "ON" else "OFF"}")
         ioMutex.withLock {
             sendCommandWithResponse(
                 Ic705CatProtocol.buildSplitCommand(enabled),
@@ -180,6 +195,7 @@ class Ic705Controller(
 
     suspend fun setVfo(vfo: String): Boolean = withContext(Dispatchers.IO) {
         val cmd = Ic705CatProtocol.buildSetVfoCommand(vfo) ?: return@withContext false
+        Log.d(tag, "Selecting VFO $vfo")
         ioMutex.withLock {
             sendCommandWithResponse(cmd, Ic705CatProtocol.CMD_SET_VFO)
         }
@@ -188,6 +204,7 @@ class Ic705Controller(
     private suspend fun sendCommand(bytes: ByteArray): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                Log.d(tag, "TX >> ${bytes.toHexString()}")
                 outputStream?.write(bytes) ?: return@withContext false
                 outputStream?.flush()
                 delay(commandDelayMs.milliseconds)
@@ -236,13 +253,15 @@ class Ic705Controller(
         while (System.currentTimeMillis() - startTime < responseTimeoutMs) {
             val message = readCivMessage() ?: continue
             
+            Log.d(tag, "RX << ${message.toHexString()}")
+            
             if (!Ic705CatProtocol.isValidMessage(message)) {
-                Log.d(tag, "Invalid message format")
+                Log.d(tag, "Invalid message format (missing preamble or EOM)")
                 continue
             }
             
             if (!Ic705CatProtocol.isResponseFromRadio(message)) {
-                Log.d(tag, "Ignoring non-response message")
+                Log.d(tag, "Ignoring non-response message (wrong direction)")
                 continue
             }
             
@@ -250,10 +269,12 @@ class Ic705Controller(
             
             // Accept OK/NG responses or matching command echo
             if (cmdByte == Ic705CatProtocol.OK || cmdByte == Ic705CatProtocol.NG) {
+                Log.d(tag, "Received ${if (cmdByte == Ic705CatProtocol.OK) "OK" else "NG"} response")
                 return message
             }
             
             if (cmdByte == expectedCommand) {
+                Log.d(tag, "Received expected response for command 0x${expectedCommand.toString(16)}")
                 return message
             }
             
@@ -319,5 +340,13 @@ class Ic705Controller(
                 null
             }
         }
+    }
+
+    /**
+     * Convert ByteArray to hex string for debug logging.
+     * Example: [0xFE, 0xFE, 0xA4, 0xE0, 0xFB, 0xFD] -> "FE FE A4 E0 FB FD"
+     */
+    private fun ByteArray.toHexString(): String {
+        return joinToString(" ") { byte -> "%02X".format(byte.toInt() and 0xFF) }
     }
 }

@@ -181,17 +181,21 @@ class RadioTrackingService(
                 // Set VFO A (main/RX) - downlink
                 if (rxMode != null && rxBaseFreq != null) {
                     tx.setVfo("A")
-                    tx.setMode(rxMode)
+                    delay(200) // Give radio time to switch VFO
                     tx.setFrequency(rxBaseFreq)
-                    Log.i(tag, "VFO A (RX): mode=$rxMode freq=$rxBaseFreq")
+                    delay(200)
+                    tx.setMode(rxMode)
+                    Log.i(tag, "VFO A (RX): freq=$rxBaseFreq mode=$rxMode")
                 }
                 
                 // Set VFO B (sub/TX) - uplink
                 if (txMode != null && txBaseFreq != null) {
                     tx.setVfo("B")
-                    tx.setMode(txMode)
+                    delay(200) // Give radio time to switch VFO
                     tx.setFrequency(txBaseFreq)
-                    Log.i(tag, "VFO B (TX): mode=$txMode freq=$txBaseFreq")
+                    delay(200)
+                    tx.setMode(txMode)
+                    Log.i(tag, "VFO B (TX): freq=$txBaseFreq mode=$txMode")
                     
                     // Set CTCSS if FM
                     if (txMode.uppercase() == "FM") {
@@ -204,6 +208,7 @@ class RadioTrackingService(
                 
                 // Return to VFO A (main)
                 tx.setVfo("A")
+                delay(200)
                 Log.i(tag, "Split mode setup complete, returned to VFO A")
             } else {
                 // Dual radio mode setup (existing behavior)
@@ -337,10 +342,12 @@ class RadioTrackingService(
                         
                         if (pttActive && txRadioFreq != null) {
                             // PTT ON - radio switched to VFO B (TX), update TX frequency
+                            Log.d(tag, "Split mode: PTT ON, setting TX freq=$txRadioFreq Hz")
                             tx.setFrequencyToCurrentVfo(txRadioFreq)
                             lastSetTxFreq = txRadioFreq.toDouble()
                         } else if (!pttActive && rxRadioFreq != null) {
                             // PTT OFF - radio on VFO A (RX), update RX frequency
+                            Log.d(tag, "Split mode: PTT OFF, setting RX freq=$rxRadioFreq Hz")
                             tx.setFrequencyToCurrentVfo(rxRadioFreq)
                             lastSetRxFreq = rxRadioFreq.toDouble()
                         }
