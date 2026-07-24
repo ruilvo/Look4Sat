@@ -222,7 +222,7 @@ object Ic705CivProtocol {
     /**
      * Parse CI-V response frame.
      * Expected format: [0xFE 0xFE] [FromAddr] [ToAddr] [Command] [Data...] [0xFD]
-     * Returns data payload (between command and postamble) or null if invalid.
+     * Returns data payload (command and data bytes) or null if invalid.
      */
     fun parseResponse(response: ByteArray): ByteArray? {
         if (response.size < 6) return null
@@ -233,7 +233,7 @@ object Ic705CivProtocol {
         val toAddr = response[3]
         if (fromAddr != ADDR_IC705 || toAddr != ADDR_CONTROLLER) return null
 
-        return response.copyOfRange(5, response.size - 1)
+        return response.copyOfRange(4, response.size - 1)
     }
 
     /**
@@ -241,7 +241,12 @@ object Ic705CivProtocol {
      */
     fun isAck(response: ByteArray): Boolean {
         val data = parseResponse(response) ?: return false
-        return data.size == 1 && (data[0] == ACK_OK || data[0] == ACK_NG)
+        // ACK can be standalone [ACK] or with command [CMD, ACK]
+        return when (data.size) {
+            1 -> data[0] == ACK_OK || data[0] == ACK_NG
+            2 -> data[1] == ACK_OK || data[1] == ACK_NG
+            else -> false
+        }
     }
 
     /**
@@ -249,7 +254,12 @@ object Ic705CivProtocol {
      */
     fun isAckOk(response: ByteArray): Boolean {
         val data = parseResponse(response) ?: return false
-        return data.size == 1 && data[0] == ACK_OK
+        // ACK can be standalone [ACK] or with command [CMD, ACK]
+        return when (data.size) {
+            1 -> data[0] == ACK_OK
+            2 -> data[1] == ACK_OK
+            else -> false
+        }
     }
 
     /**

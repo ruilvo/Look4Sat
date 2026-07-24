@@ -14,7 +14,7 @@ class Ic705CivProtocolTest {
     @Test
     fun encodeFrequencyBcd_145800000() {
         val bcd = Ic705CivProtocol.encodeFrequencyBcd(145800000L)
-        assertContentEquals(byteArrayOf(0x00, 0x00, 0x80, 0x45, 0x01), bcd)
+        assertContentEquals(byteArrayOf(0x00, 0x00, 0x80.toByte(), 0x45, 0x01), bcd)
     }
 
     @Test
@@ -38,7 +38,7 @@ class Ic705CivProtocolTest {
     @Test
     fun encodeFrequencyBcd_maxFreq() {
         val bcd = Ic705CivProtocol.encodeFrequencyBcd(9999999999L)
-        assertContentEquals(byteArrayOf(0x99, 0x99, 0x99, 0x99, 0x99), bcd)
+        assertContentEquals(byteArrayOf(0x99.toByte(), 0x99.toByte(), 0x99.toByte(), 0x99.toByte(), 0x99.toByte()), bcd)
     }
 
     @Test
@@ -53,22 +53,22 @@ class Ic705CivProtocolTest {
     @Test
     fun buildSetFreqCommand_correctFormat() {
         val cmd = Ic705CivProtocol.buildSetFreqCommand(145800000L)
-        assertEquals(13, cmd.size)
+        assertEquals(11, cmd.size)
         assertEquals(Ic705CivProtocol.PREAMBLE, cmd[0])
         assertEquals(Ic705CivProtocol.PREAMBLE, cmd[1])
         assertEquals(Ic705CivProtocol.ADDR_IC705, cmd[2])
         assertEquals(Ic705CivProtocol.ADDR_CONTROLLER, cmd[3])
         assertEquals(Ic705CivProtocol.CMD_SET_FREQ, cmd[4])
-        assertEquals(Ic705CivProtocol.POSTAMBLE, cmd[12])
+        assertEquals(Ic705CivProtocol.POSTAMBLE, cmd[10])
         // BCD: [0x00, 0x00, 0x80, 0x45, 0x01]
-        assertContentEquals(byteArrayOf(0x00, 0x00, 0x80, 0x45, 0x01), cmd.copyOfRange(5, 10))
+        assertContentEquals(byteArrayOf(0x00, 0x00, 0x80.toByte(), 0x45, 0x01), cmd.copyOfRange(5, 10))
     }
 
     @Test
     fun buildSetModeCommand_usb() {
         val cmd = Ic705CivProtocol.buildSetModeCommand("USB")
         assertNotNull(cmd)
-        assertEquals(10, cmd.size)
+        assertEquals(8, cmd.size)
         assertEquals(Ic705CivProtocol.CMD_SET_MODE, cmd[4])
         assertEquals(0x01.toByte(), cmd[5]) // USB mode
         assertEquals(Ic705CivProtocol.FILTER_FIL1, cmd[6]) // Default filter
@@ -114,7 +114,7 @@ class Ic705CivProtocolTest {
     @Test
     fun buildSetCtcssToneCommand_correctFormat() {
         val cmd = Ic705CivProtocol.buildSetCtcssToneCommand(67.0)
-        assertEquals(12, cmd.size)
+        assertEquals(10, cmd.size)
         assertEquals(Ic705CivProtocol.CMD_SET_TONE, cmd[4])
         assertEquals(Ic705CivProtocol.SUB_SET_TONE, cmd[5])
         assertContentEquals(byteArrayOf(0x06, 0x70, 0x00), cmd.copyOfRange(6, 9))
@@ -165,14 +165,14 @@ class Ic705CivProtocolTest {
     @Test
     fun buildReadFreqCommand() {
         val cmd = Ic705CivProtocol.buildReadFreqCommand()
-        assertEquals(8, cmd.size)
+        assertEquals(6, cmd.size)
         assertEquals(Ic705CivProtocol.CMD_READ_FREQ, cmd[4])
     }
 
     @Test
     fun buildReadModeCommand() {
         val cmd = Ic705CivProtocol.buildReadModeCommand()
-        assertEquals(8, cmd.size)
+        assertEquals(6, cmd.size)
         assertEquals(Ic705CivProtocol.CMD_READ_MODE, cmd[4])
     }
 
@@ -203,6 +203,8 @@ class Ic705CivProtocolTest {
         )
         val data = Ic705CivProtocol.parseResponse(response)
         assertNotNull(data)
+        assertEquals(2, data.size) // [CMD_SET_MODE, ACK_NG]
+        assertEquals(Ic705CivProtocol.CMD_SET_MODE, data[0])
         assertEquals(Ic705CivProtocol.ACK_NG, data[1])
     }
 
@@ -254,7 +256,7 @@ class Ic705CivProtocolTest {
             Ic705CivProtocol.PREAMBLE, Ic705CivProtocol.PREAMBLE,
             Ic705CivProtocol.ADDR_IC705, Ic705CivProtocol.ADDR_CONTROLLER,
             Ic705CivProtocol.CMD_READ_FREQ,
-            0x00, 0x00, 0x80, 0x45, 0x01, // 145800000 Hz
+            0x00, 0x00, 0x80.toByte(), 0x45, 0x01, // 145800000 Hz
             Ic705CivProtocol.POSTAMBLE
         )
         val freq = Ic705CivProtocol.parseFrequencyResponse(response)
