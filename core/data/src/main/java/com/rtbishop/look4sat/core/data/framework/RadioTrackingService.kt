@@ -273,6 +273,8 @@ class RadioTrackingService(
             var tuningRadio = "" // "", "tx", or "rx" - which radio the user is tuning
             var lastReadFreq = 0L
             var stableCount = 0
+            var lastPttState = false // Track PTT state to detect changes
+            var currentVfo = IRadioController.Vfo.VFO_A // Track which VFO we're on
 
             while (isActive) {
                 val currentState = _state.value
@@ -446,22 +448,27 @@ class RadioTrackingService(
                         // Split mode: check PTT state and adjust appropriate VFO
                         val isPttActive = (tx as? Ic705Controller)?.readPttState() ?: false
                         
-                        if (isPttActive) {
-                            // Transmitting: update VFO-B (TX) only
-                            if (txRadioFreq != null) {
-                                tx.setVfo(IRadioController.Vfo.VFO_B)
+                        // Only switch VFO when PTT state changes
+                        if (isPttActive != lastPttState) {
+                            val targetVfo = if (isPttActive) IRadioController.Vfo.VFO_B else IRadioController.Vfo.VFO_A
+                            if (currentVfo != targetVfo) {
+                                tx.setVfo(targetVfo)
                                 delay(vfoSwitchDelayMs)
-                                tx.setFrequency(txRadioFreq)
-                                lastSetTxFreq = txRadioFreq.toDouble()
+                                currentVfo = targetVfo
+                                Log.i(tag, "PTT ${if (isPttActive) "ON" else "OFF"} - switched to VFO ${if (isPttActive) "B" else "A"}")
                             }
-                        } else {
-                            // Receiving: update VFO-A (RX) only
-                            if (rxRadioFreq != null) {
-                                tx.setVfo(IRadioController.Vfo.VFO_A)
-                                delay(vfoSwitchDelayMs)
-                                tx.setFrequency(rxRadioFreq)
-                                lastSetRxFreq = rxRadioFreq.toDouble()
-                            }
+                            lastPttState = isPttActive
+                        }
+                        
+                        // Update frequency on current VFO (no switching needed)
+                        if (isPttActive && txRadioFreq != null) {
+                            // Transmitting: update TX frequency
+                            tx.setFrequency(txRadioFreq)
+                            lastSetTxFreq = txRadioFreq.toDouble()
+                        } else if (!isPttActive && rxRadioFreq != null) {
+                            // Receiving: update RX frequency
+                            tx.setFrequency(rxRadioFreq)
+                            lastSetRxFreq = rxRadioFreq.toDouble()
                         }
                     } else {
                         // Dual radio mode
