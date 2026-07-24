@@ -204,9 +204,10 @@ fun RowScope.NextPassRow(pass: OrbitalPass, modifier: Modifier = Modifier, isUtc
 }
 
 @Composable
-fun CardButton(onClick: () -> Unit, text: String, modifier: Modifier = Modifier) {
+fun CardButton(onClick: () -> Unit, text: String, modifier: Modifier = Modifier, enabled: Boolean = true) {
     ElevatedButton(
         onClick = onClick,
+        enabled = enabled,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant

@@ -414,8 +414,9 @@ private fun ExpandedRadioControl(
             val deviceName = radioControl.radioModel ?: "radio"
             val buttonText = if (isConnecting) "Connecting..." else "Connect to $deviceName and track"
             CardButton(
-                onClick = { if (!isConnecting) onAction(RadarAction.ConnectAndTrack) },
+                onClick = { onAction(RadarAction.ConnectAndTrack) },
                 text = buttonText,
+                enabled = !isConnecting,
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
