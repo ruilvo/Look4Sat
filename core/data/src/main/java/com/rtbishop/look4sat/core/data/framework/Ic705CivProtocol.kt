@@ -35,12 +35,33 @@ object Ic705CivProtocol {
     const val CMD_SET_FREQ: Byte = 0x05
     const val CMD_SET_MODE: Byte = 0x06
     const val CMD_SELECT_VFO: Byte = 0x07
+    const val CMD_SELECT_MODE: Byte = 0x08
     const val CMD_SPLIT: Byte = 0x0F
+    const val CMD_BAND_SELECT: Byte = 0x1A
     const val CMD_CTCSS: Byte = 0x16
     const val CMD_SET_TONE: Byte = 0x1B
 
     const val VFO_A: Byte = 0x00
     const val VFO_B: Byte = 0x01
+    const val VFO_MODE: Byte = 0x00 // Operating mode: VFO
+    const val MEM_MODE: Byte = 0x01 // Operating mode: Memory
+    
+    const val SUB_BAND_SELECT: Byte = 0x00
+    
+    // Band selection bytes for IC-705
+    const val BAND_160M: Byte = 0x01
+    const val BAND_80M: Byte = 0x02
+    const val BAND_40M: Byte = 0x03
+    const val BAND_30M: Byte = 0x04
+    const val BAND_20M: Byte = 0x05
+    const val BAND_17M: Byte = 0x06
+    const val BAND_15M: Byte = 0x07
+    const val BAND_12M: Byte = 0x08
+    const val BAND_10M: Byte = 0x09
+    const val BAND_6M: Byte = 0x10
+    const val BAND_2M: Byte = 0x11
+    const val BAND_70CM: Byte = 0x12
+    const val BAND_23CM: Byte = 0x13
 
     const val SPLIT_OFF: Byte = 0x00
     const val SPLIT_ON: Byte = 0x01
@@ -150,6 +171,37 @@ object Ic705CivProtocol {
 
     fun buildSelectVfoCommand(vfo: Byte): ByteArray {
         return buildFrame(CMD_SELECT_VFO, vfo)
+    }
+
+    fun buildSelectOperatingModeCommand(): ByteArray {
+        return buildFrame(CMD_SELECT_MODE, VFO_MODE)
+    }
+
+    fun buildBandSelectCommand(band: Byte): ByteArray {
+        return buildFrame(CMD_BAND_SELECT, SUB_BAND_SELECT, band)
+    }
+
+    /**
+     * Determine the band byte for a given frequency in Hz.
+     * Returns null if frequency is out of range for IC-705.
+     */
+    fun getBandForFrequency(frequencyHz: Long): Byte? {
+        return when (frequencyHz) {
+            in 1_800_000L..2_000_000L -> BAND_160M
+            in 3_500_000L..4_000_000L -> BAND_80M
+            in 7_000_000L..7_300_000L -> BAND_40M
+            in 10_100_000L..10_150_000L -> BAND_30M
+            in 14_000_000L..14_350_000L -> BAND_20M
+            in 18_068_000L..18_168_000L -> BAND_17M
+            in 21_000_000L..21_450_000L -> BAND_15M
+            in 24_890_000L..24_990_000L -> BAND_12M
+            in 28_000_000L..29_700_000L -> BAND_10M
+            in 50_000_000L..54_000_000L -> BAND_6M
+            in 144_000_000L..148_000_000L -> BAND_2M
+            in 430_000_000L..450_000_000L -> BAND_70CM
+            in 1_240_000_000L..1_300_000_000L -> BAND_23CM
+            else -> null
+        }
     }
 
     fun buildSplitCommand(enabled: Boolean): ByteArray {

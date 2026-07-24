@@ -40,6 +40,7 @@ class Ic705Controller(
     private val sppId: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
     private val ioMutex = Mutex()
     private val commandDelayMs = 100L
+    private val bandSwitchDelayMs = 200L
     private val responseTimeoutMs = 500L
     private val maxAckReadFailures = 3
 
@@ -64,6 +65,18 @@ class Ic705Controller(
             ackReadFailureCount = 0
             isConnected = true
             Log.i(tag, "Connected to $deviceAddress")
+            
+            // Ensure radio is in VFO mode (not memory mode)
+            delay(bandSwitchDelayMs)
+            ioMutex.withLock {
+                val result = sendCommandWithAck(Ic705CivProtocol.buildSelectOperatingModeCommand())
+                if (result) {
+                    Log.i(tag, "Radio set to VFO mode")
+                } else {
+                    Log.w(tag, "Failed to set VFO mode (may already be in VFO mode)")
+                }
+            }
+            
             true
         } catch (e: Exception) {
             Log.e(tag, "Connect error: ${e.message}")
@@ -93,7 +106,29 @@ class Ic705Controller(
 
     override suspend fun setFrequency(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
-            sendCommandWithAck(Ic705CivProtocol.buildSetFreqCommand(frequencyHz))
+            // First, select the appropriate band for this frequency
+            val band = Ic705CivProtocol.getBandForFrequency(frequencyHz)
+            if (band != null) {
+                Log.d(tag, "Selecting band for $frequencyHz Hz")
+                val bandResult = sendCommandWithAck(Ic705CivProtocol.buildBandSelectCommand(band))
+                if (!bandResult) {
+                    Log.w(tag, "Band selection failed for $frequencyHz Hz")
+                }
+                delay(bandSwitchDelayMs) // Give radio time to change bands
+            } else {
+                Log.w(tag, "Frequency $frequencyHz Hz is out of band range for IC-705")
+            }
+            
+            val cmd = Ic705CivProtocol.buildSetFreqCommand(frequencyHz)
+            val bcd = Ic705CivProtocol.encodeFrequencyBcd(frequencyHz)
+            Log.d(tag, "Setting frequency to $frequencyHz Hz, BCD=${bcd.joinToString(" ") { "%02X".format(it) }}")
+            val result = sendCommandWithAck(cmd)
+            if (result) {
+                Log.d(tag, "Frequency set successfully to $frequencyHz Hz")
+            } else {
+                Log.w(tag, "Failed to set frequency to $frequencyHz Hz")
+            }
+            result
         }
     }
 
@@ -146,7 +181,14 @@ class Ic705Controller(
                 IRadioController.Vfo.VFO_A -> Ic705CivProtocol.VFO_A
                 IRadioController.Vfo.VFO_B -> Ic705CivProtocol.VFO_B
             }
-            sendCommandWithAck(Ic705CivProtocol.buildSelectVfoCommand(vfoByte))
+            Log.d(tag, "Switching to VFO ${if (vfo == IRadioController.Vfo.VFO_A) "A" else "B"}")
+            val result = sendCommandWithAck(Ic705CivProtocol.buildSelectVfoCommand(vfoByte))
+            if (result) {
+                Log.d(tag, "VFO switch successful")
+            } else {
+                Log.w(tag, "VFO switch failed")
+            }
+            result
         }
     }
 

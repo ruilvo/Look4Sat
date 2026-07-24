@@ -44,6 +44,7 @@ class RadioTrackingService(
 ) : IRadioTrackingService {
 
     private val tag = "RadioTracking"
+    private val vfoSwitchDelayMs = 300L
     private val _state = MutableStateFlow(RadioTrackingState())
     override val state: StateFlow<RadioTrackingState> = _state
 
@@ -162,33 +163,43 @@ class RadioTrackingService(
             if (useSplit && tx != null && tx.isConnected) {
                 // Disable split temporarily for setup
                 tx.setSplit(false)
-                delay(100)
+                delay(vfoSwitchDelayMs)
 
                 // Set VFO-A for RX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 if (initialRxBaseFreq != null) {
                     tx.setFrequency(initialRxBaseFreq)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                     Log.i(tag, "VFO-A (RX) frequency set to $initialRxBaseFreq Hz")
+                    // Verify frequency was set
+                    val readResult = tx.readFrequencyAndMode()
+                    if (readResult != null) {
+                        Log.i(tag, "VFO-A readback: freq=${readResult.first} Hz, mode=${readResult.second}")
+                    }
                 }
                 if (rxMode != null) {
                     tx.setMode(rxMode)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                     Log.i(tag, "VFO-A (RX) mode set to $rxMode")
                 }
 
                 // Set VFO-B for TX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 if (initialTxBaseFreq != null) {
                     tx.setFrequency(initialTxBaseFreq)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                     Log.i(tag, "VFO-B (TX) frequency set to $initialTxBaseFreq Hz")
+                    // Verify frequency was set
+                    val readResult = tx.readFrequencyAndMode()
+                    if (readResult != null) {
+                        Log.i(tag, "VFO-B readback: freq=${readResult.first} Hz, mode=${readResult.second}")
+                    }
                 }
                 if (txMode != null) {
                     tx.setMode(txMode)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                     Log.i(tag, "VFO-B (TX) mode set to $txMode")
                 }
 
@@ -204,13 +215,19 @@ class RadioTrackingService(
 
                 // Return to VFO-A (RX) and enable split operation
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 tx.setSplit(true)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 Log.i(tag, "Split mode enabled")
             } else {
                 // Dual radio mode - set frequencies first, then modes
                 if (tx != null && tx.isConnected) {
+                    // Read current state first
+                    val currentState = tx.readFrequencyAndMode()
+                    if (currentState != null) {
+                        Log.i(tag, "TX current state: freq=${currentState.first} Hz, mode=${currentState.second}")
+                    }
+                    
                     if (initialTxBaseFreq != null) {
                         tx.setFrequency(initialTxBaseFreq)
                         delay(200)
@@ -274,6 +291,7 @@ class RadioTrackingService(
                         // Split mode: read the appropriate VFO
                         val vfo = if (tuningRadio == "tx") IRadioController.Vfo.VFO_B else IRadioController.Vfo.VFO_A
                         tx.setVfo(vfo)
+                        delay(vfoSwitchDelayMs)
                         val readResult = tx.readFrequencyAndMode()
                         if (readResult != null) {
                             val (freq, _) = readResult
@@ -351,6 +369,7 @@ class RadioTrackingService(
                         // Split mode: check both VFOs for tuning
                         if (hasUplink && lastSetTxFreq > 0.0) {
                             tx.setVfo(IRadioController.Vfo.VFO_B)
+                            delay(vfoSwitchDelayMs)
                             val readResult = tx.readFrequencyAndMode()
                             if (readResult != null) {
                                 val (actualTxFreq, _) = readResult
@@ -365,6 +384,7 @@ class RadioTrackingService(
 
                         if (tuningRadio.isEmpty() && lastSetRxFreq > 0.0) {
                             tx.setVfo(IRadioController.Vfo.VFO_A)
+                            delay(vfoSwitchDelayMs)
                             val readResult = tx.readFrequencyAndMode()
                             if (readResult != null) {
                                 val (actualRxFreq, _) = readResult
@@ -422,13 +442,13 @@ class RadioTrackingService(
                         // Split mode: update both VFOs
                         if (rxRadioFreq != null) {
                             tx.setVfo(IRadioController.Vfo.VFO_A)
-                            delay(100)
+                            delay(vfoSwitchDelayMs)
                             tx.setFrequency(rxRadioFreq)
                             lastSetRxFreq = rxRadioFreq.toDouble()
                         }
                         if (txRadioFreq != null) {
                             tx.setVfo(IRadioController.Vfo.VFO_B)
-                            delay(100)
+                            delay(vfoSwitchDelayMs)
                             tx.setFrequency(txRadioFreq)
                             lastSetTxFreq = txRadioFreq.toDouble()
                         }
@@ -497,30 +517,30 @@ class RadioTrackingService(
             if (useSplit && tx != null && tx.isConnected) {
                 // Split mode: configure both VFOs
                 tx.setSplit(false)
-                delay(100)
+                delay(vfoSwitchDelayMs)
 
                 // VFO-A (RX)
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 rxNominal?.let {
                     tx.setFrequency(it)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                 }
                 rxMode?.let {
                     tx.setMode(it)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                 }
 
                 // VFO-B (TX)
                 tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 txCenter?.let {
                     tx.setFrequency(it)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                 }
                 txMode?.let {
                     tx.setMode(it)
-                    delay(200)
+                    delay(vfoSwitchDelayMs)
                 }
 
                 if (txMode?.uppercase() == "FM") {
@@ -533,9 +553,9 @@ class RadioTrackingService(
                 }
 
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(100)
+                delay(vfoSwitchDelayMs)
                 tx.setSplit(true)
-                delay(100)
+                delay(vfoSwitchDelayMs)
             } else {
                 // Dual radio mode
                 if (tx != null && tx.isConnected) {
@@ -616,17 +636,18 @@ class RadioTrackingService(
             if (useSplit && tx != null && tx.isConnected) {
                 // Split mode: set modes on both VFOs
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(50)
+                delay(vfoSwitchDelayMs)
                 tx.setMode(rxMode)
                 delay(50)
 
                 tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(50)
+                delay(vfoSwitchDelayMs)
                 tx.setMode(txMode)
                 delay(50)
 
                 // Return to VFO-A
                 tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(vfoSwitchDelayMs)
             } else {
                 // Dual radio mode
                 tx?.setMode(txMode)
