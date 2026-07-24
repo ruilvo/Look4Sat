@@ -422,11 +422,13 @@ class RadioTrackingService(
                         // Split mode: update both VFOs
                         if (rxRadioFreq != null) {
                             tx.setVfo(IRadioController.Vfo.VFO_A)
+                            delay(100)
                             tx.setFrequency(rxRadioFreq)
                             lastSetRxFreq = rxRadioFreq.toDouble()
                         }
                         if (txRadioFreq != null) {
                             tx.setVfo(IRadioController.Vfo.VFO_B)
+                            delay(100)
                             tx.setFrequency(txRadioFreq)
                             lastSetTxFreq = txRadioFreq.toDouble()
                         }
