@@ -305,17 +305,19 @@ class RadioTrackingService(
 
             if (tuningRadio.isNotEmpty()) {
                 // User is manually tuning - wait for stabilization
-                txBaseFreq = handleSplitModeTuning(
+                val tuningResult = handleSplitModeTuning(
                     radio, tuningRadio, lastReadFreq, stableCount, 
                     txBaseFreq, xpdr, c, v
-                )?.let { result ->
-                    tuningRadio = result.newTuningRadio
-                    lastReadFreq = result.newLastReadFreq
-                    stableCount = result.newStableCount
-                    lastSetTxFreq = result.newLastSetTxFreq
-                    lastSetRxFreq = result.newLastSetRxFreq
-                    result.newTxBaseFreq
-                } ?: txBaseFreq
+                )
+                if (tuningResult != null) {
+                    tuningRadio = tuningResult.newTuningRadio
+                    lastReadFreq = tuningResult.newLastReadFreq
+                    stableCount = tuningResult.newStableCount
+                    lastSetTxFreq = tuningResult.newLastSetTxFreq
+                    lastSetRxFreq = tuningResult.newLastSetRxFreq
+                    txBaseFreq = tuningResult.newTxBaseFreq ?: txBaseFreq
+                    currentVfo = tuningResult.currentVfo
+                }
             } else {
                 // Normal tracking - detect if user started tuning
                 val tuningResult = detectSplitModeTuning(
@@ -325,6 +327,7 @@ class RadioTrackingService(
                     tuningRadio = tuningResult.tuningRadio
                     lastReadFreq = tuningResult.lastReadFreq
                     stableCount = 0
+                    currentVfo = tuningResult.currentVfo
                 }
             }
 
@@ -475,12 +478,14 @@ class RadioTrackingService(
         val newStableCount: Int,
         val newLastSetTxFreq: Double,
         val newLastSetRxFreq: Double,
-        val newTxBaseFreq: Long?
+        val newTxBaseFreq: Long?,
+        val currentVfo: IRadioController.Vfo
     )
 
     private data class TuningDetectionResult(
         val tuningRadio: String,
-        val lastReadFreq: Long
+        val lastReadFreq: Long,
+        val currentVfo: IRadioController.Vfo
     )
 
     private data class FrequencyUpdateResult(
@@ -526,10 +531,10 @@ class RadioTrackingService(
                 } else txBaseFreq
             } else txBaseFreq
             
-            return SplitModeTuningResult("", 0L, 0, 0.0, 0.0, newTxBase)
+            return SplitModeTuningResult("", 0L, 0, 0.0, 0.0, newTxBase, vfo)
         }
         
-        return SplitModeTuningResult(tuningRadio, newLastReadFreq, newStableCount, 0.0, 0.0, txBaseFreq)
+        return SplitModeTuningResult(tuningRadio, newLastReadFreq, newStableCount, 0.0, 0.0, txBaseFreq, vfo)
     }
 
     private suspend fun detectSplitModeTuning(
@@ -548,7 +553,7 @@ class RadioTrackingService(
                 val (actualTxFreq, _) = readResult
                 if (kotlin.math.abs(actualTxFreq - lastSetTxFreq) >= 20.0) {
                     Log.i(tag, "TX (VFO-B) tuning detected")
-                    return TuningDetectionResult("tx", actualTxFreq)
+                    return TuningDetectionResult("tx", actualTxFreq, IRadioController.Vfo.VFO_B)
                 }
             }
         }
@@ -561,7 +566,7 @@ class RadioTrackingService(
                 val (actualRxFreq, _) = readResult
                 if (kotlin.math.abs(actualRxFreq - lastSetRxFreq) >= 20.0) {
                     Log.i(tag, "RX (VFO-A) tuning detected")
-                    return TuningDetectionResult("rx", actualRxFreq)
+                    return TuningDetectionResult("rx", actualRxFreq, IRadioController.Vfo.VFO_A)
                 }
             }
         }
@@ -583,15 +588,17 @@ class RadioTrackingService(
         var newLastSetTxFreq = 0.0
         var newLastSetRxFreq = 0.0
         
-        if (currentVfo != targetVfo && targetFreq != null) {
+        // Only switch VFO when NOT transmitting and target VFO is different
+        if (!isPttActive && currentVfo != targetVfo && targetFreq != null) {
             radio.setVfo(targetVfo)
             delay(vfoSwitchDelayMs)
             newVfo = targetVfo
-            Log.d(tag, "Split: Switched to VFO ${if (isPttActive) "B (TX)" else "A (RX)"}")
+            Log.d(tag, "Split: Switched to VFO ${if (targetVfo == IRadioController.Vfo.VFO_B) "B (TX)" else "A (RX)"}")
         }
         
+        // Set frequency on current VFO (without band selection - band already set at start)
         if (targetFreq != null) {
-            radio.setFrequency(targetFreq)
+            radio.setFrequencyWithoutBand(targetFreq)
             if (isPttActive) {
                 newLastSetTxFreq = targetFreq.toDouble()
             } else {
