@@ -42,6 +42,7 @@ class Ic705Controller(
     private val commandDelayMs = 100L
     private val bandSwitchDelayMs = 200L
     private val responseTimeoutMs = 500L
+    private val responseWaitMs = 50L // Wait for radio to process command before reading
     private val maxAckReadFailures = 3
 
     private var socket: BluetoothSocket? = null
@@ -153,6 +154,7 @@ class Ic705Controller(
         ioMutex.withLock {
             val freqSent = sendCommand(Ic705CivProtocol.buildReadFreqCommand())
             if (!freqSent) return@withContext null
+            delay(responseWaitMs.milliseconds)
             val freqResponse = readCivResponse() ?: return@withContext null
             val frequency = Ic705CivProtocol.parseFrequencyResponse(freqResponse) ?: return@withContext null
 
@@ -160,6 +162,7 @@ class Ic705Controller(
 
             val modeSent = sendCommand(Ic705CivProtocol.buildReadModeCommand())
             if (!modeSent) return@withContext null
+            delay(responseWaitMs.milliseconds)
             val modeResponse = readCivResponse() ?: return@withContext null
             val mode = Ic705CivProtocol.parseModeResponse(modeResponse) ?: return@withContext null
 
@@ -203,7 +206,6 @@ class Ic705Controller(
             try {
                 outputStream?.write(bytes) ?: return@withContext false
                 outputStream?.flush()
-                delay(commandDelayMs.milliseconds)
                 true
             } catch (e: Exception) {
                 Log.e(tag, "Send error: ${e.message}")
@@ -218,6 +220,8 @@ class Ic705Controller(
         if (!sendCommand(bytes)) return false
         return withContext(Dispatchers.IO) {
             try {
+                // Give radio time to process command before reading response
+                delay(responseWaitMs.milliseconds)
                 val response = readCivResponse() ?: run {
                     ackReadFailureCount += 1
                     Log.w(tag, "ACK read failure (${ackReadFailureCount}/$maxAckReadFailures)")
@@ -233,6 +237,8 @@ class Ic705Controller(
                 if (!isOk) {
                     Log.w(tag, "Command returned NG or invalid ACK")
                 }
+                // Delay after processing response to avoid overwhelming the radio
+                delay(commandDelayMs.milliseconds)
                 isOk
             } catch (e: Exception) {
                 ackReadFailureCount += 1
