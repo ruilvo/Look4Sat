@@ -46,12 +46,12 @@ object Ic705CivProtocol {
     const val VFO_B: Byte = 0x01
     const val VFO_MODE: Byte = 0x00 // Operating mode: VFO
     const val MEM_MODE: Byte = 0x01 // Operating mode: Memory
-    
+
     const val PTT_OFF: Byte = 0x00
     const val PTT_ON: Byte = 0x01
-    
+
     const val SUB_BAND_SELECT: Byte = 0x00
-    
+
     // Band selection bytes for IC-705
     const val BAND_160M: Byte = 0x01
     const val BAND_80M: Byte = 0x02
@@ -244,12 +244,10 @@ object Ic705CivProtocol {
 
         val fromAddr = response[2]
         val toAddr = response[3]
-        
-        // Accept responses from controller (E0) or broadcast (00)
-        // Radio sends different types of responses:
-        // - ACKs from E0 (controller echo)
-        // - Data responses from 00 (broadcast) or A4 (radio itself)
-        if (toAddr != ADDR_IC705 && fromAddr != ADDR_IC705) return null
+
+        // Only accept direct IC-705 -> controller responses.
+        // Broadcast frames are intentionally ignored here.
+        if (fromAddr != ADDR_IC705 || toAddr != ADDR_CONTROLLER) return null
 
         return response.copyOfRange(4, response.size - 1)
     }
@@ -310,17 +308,17 @@ object Ic705CivProtocol {
      */
     fun parsePttResponse(response: ByteArray): Boolean? {
         val data = parseResponse(response) ?: return null
-        
+
         // Try parsing as direct PTT response: [1C] [PTT state]
         if (data.size >= 2 && data[0] == CMD_PTT) {
             return data[1] == PTT_ON
         }
-        
+
         // Try parsing as broadcast status: [01] [mode] [PTT state]
         if (data.size >= 3 && data[0] == 0x01.toByte()) {
             return data[2] == 0x01.toByte()
         }
-        
+
         return null
     }
 }
