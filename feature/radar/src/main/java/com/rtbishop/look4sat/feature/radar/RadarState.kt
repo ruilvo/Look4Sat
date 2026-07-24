@@ -38,7 +38,8 @@ data class RadioControlSubState(
     val txBaseFrequencyHz: Long? = null,
     val ctcssTone: Double? = null,
     val isTracking: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val useSplitMode: Boolean = false
 )
 
 data class TransceiverSubState(

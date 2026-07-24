@@ -38,4 +38,17 @@ interface IRadioController {
     suspend fun pttOn(): Boolean
 
     suspend fun pttOff(): Boolean
+
+    suspend fun setVfo(vfo: Vfo): Boolean {
+        return true // Default no-op for radios without VFO support
+    }
+
+    suspend fun setSplit(enabled: Boolean): Boolean {
+        return true // Default no-op for radios without split support
+    }
+
+    enum class Vfo {
+        VFO_A,
+        VFO_B
+    }
 }

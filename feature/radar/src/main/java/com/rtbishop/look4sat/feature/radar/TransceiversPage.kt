@@ -310,6 +310,27 @@ private fun ExpandedRadioControl(
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
         )
 
+        // Split mode indicator (if enabled)
+        if (radioControl.useSplitMode) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Split Mode: ",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "VFO-A (RX) / VFO-B (TX)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
         // Frequency tuner
         if (radioControl.txBaseFrequencyHz != null) {
             Column(

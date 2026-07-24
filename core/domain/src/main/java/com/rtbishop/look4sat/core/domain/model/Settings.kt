@@ -74,12 +74,14 @@ data class RadioControlSettings(
     val rxRadioAddress: String,
     val txRadioName: String,
     val rxRadioName: String,
-    val baudRate: Int
+    val baudRate: Int,
+    val useSplitMode: Boolean = false
 ) {
     companion object {
         val SUPPORTED_RADIOS = listOf(
             "Yaesu FT-817/818",
-            "Yaesu FT-857/897"
+            "Yaesu FT-857/897",
+            "Icom IC-705"
         )
     }
 }

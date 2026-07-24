@@ -26,6 +26,7 @@ import androidx.room.Room
 import com.rtbishop.look4sat.core.data.database.Look4SatDb
 import com.rtbishop.look4sat.core.data.framework.BluetoothReporter
 import com.rtbishop.look4sat.core.data.framework.Ft817Controller
+import com.rtbishop.look4sat.core.data.framework.Ic705Controller
 import com.rtbishop.look4sat.core.data.framework.NetworkReporter
 import com.rtbishop.look4sat.core.data.framework.RadioTrackingService
 import com.rtbishop.look4sat.core.data.repository.DatabaseRepo
@@ -107,14 +108,22 @@ class MainContainer(private val context: Context) : IMainContainer {
 
     override fun provideTxRadioController(): IRadioController {
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val address = settingsRepo.radioControlSettings.value.txRadioAddress
-        return Ft817Controller(manager, address)
+        val settings = settingsRepo.radioControlSettings.value
+        val address = settings.txRadioAddress
+        return when (settings.radioModel) {
+            "Icom IC-705" -> Ic705Controller(manager, address)
+            else -> Ft817Controller(manager, address)
+        }
     }
 
     override fun provideRxRadioController(): IRadioController {
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val address = settingsRepo.radioControlSettings.value.rxRadioAddress
-        return Ft817Controller(manager, address)
+        val settings = settingsRepo.radioControlSettings.value
+        val address = settings.rxRadioAddress
+        return when (settings.radioModel) {
+            "Icom IC-705" -> Ic705Controller(manager, address)
+            else -> Ft817Controller(manager, address)
+        }
     }
 
     override fun provideSensorsRepo(): ISensorsRepo {

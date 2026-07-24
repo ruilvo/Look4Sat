@@ -454,6 +454,7 @@ fun RadioControlDialog(
     val txName = rememberSaveable { mutableStateOf(initialSettings.txRadioName) }
     val rxName = rememberSaveable { mutableStateOf(initialSettings.rxRadioName) }
     val baudRate = rememberSaveable { mutableIntStateOf(initialSettings.baudRate) }
+    val useSplitMode = rememberSaveable { mutableStateOf(initialSettings.useSplitMode) }
     val selectingFor = rememberSaveable { mutableStateOf("") } // "tx", "rx", or ""
 
     val pairedDevices = remember {
@@ -474,7 +475,8 @@ fun RadioControlDialog(
                 rxRadioAddress = rxAddress.value,
                 txRadioName = txName.value,
                 rxRadioName = rxName.value,
-                baudRate = baudRate.intValue
+                baudRate = baudRate.intValue,
+                useSplitMode = useSplitMode.value
             )
         )
         onDismiss()
@@ -513,6 +515,30 @@ fun RadioControlDialog(
             }
             Spacer(modifier = Modifier.height(6.dp))
 
+            // Split mode toggle (IC-705 only)
+            if (radioModel.value == "Icom IC-705") {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Use Split Mode (VFO-A/B)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                        Text(
+                            "Single radio with VFO-A for RX, VFO-B for TX",
+                            fontSize = 11.sp,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = useSplitMode.value,
+                        onCheckedChange = { useSplitMode.value = it },
+                        enabled = enabled.value
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+
             // TX Radio selection
             Text("TX Radio (Uplink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
             if (txAddress.value.isNotBlank()) {
@@ -520,21 +546,23 @@ fun RadioControlDialog(
             }
             CardButton(
                 onClick = { selectingFor.value = "tx" },
-                text = "Select TX Device",
+                text = if (useSplitMode.value && radioModel.value == "Icom IC-705") "Select Radio" else "Select TX Device",
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            // RX Radio selection
-            Text("RX Radio (Downlink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-            if (rxAddress.value.isNotBlank()) {
-                Text("${rxName.value} - ${rxAddress.value}", fontSize = 13.sp)
+            // RX Radio selection (hidden in split mode)
+            if (!useSplitMode.value || radioModel.value != "Icom IC-705") {
+                Text("RX Radio (Downlink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                if (rxAddress.value.isNotBlank()) {
+                    Text("${rxName.value} - ${rxAddress.value}", fontSize = 13.sp)
+                }
+                CardButton(
+                    onClick = { selectingFor.value = "rx" },
+                    text = "Select RX Device",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-            CardButton(
-                onClick = { selectingFor.value = "rx" },
-                text = "Select RX Device",
-                modifier = Modifier.fillMaxWidth()
-            )
 
             // Paired devices list (shown when selecting)
             if (selectingFor.value.isNotBlank()) {

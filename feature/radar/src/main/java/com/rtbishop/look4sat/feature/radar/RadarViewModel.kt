@@ -182,6 +182,7 @@ class RadarViewModel(
     private fun collectRadioTrackingState() {
         viewModelScope.launch {
             trackingService.state.collect { svc ->
+                val useSplit = settingsRepo.radioControlSettings.value.useSplitMode
                 _uiState.update { state ->
                     state.copy(
                         radioControl = state.radioControl.copy(
@@ -203,7 +204,8 @@ class RadarViewModel(
                             ctcssTone = svc.ctcssTone,
                             isTracking = svc.isActive,
                             selectedTransponderUuid = svc.selectedTransponder?.uuid,
-                            errorMessage = svc.errorMessage
+                            errorMessage = svc.errorMessage,
+                            useSplitMode = useSplit
                         )
                     )
                 }
