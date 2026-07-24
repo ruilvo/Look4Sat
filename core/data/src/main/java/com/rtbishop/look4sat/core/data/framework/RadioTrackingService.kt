@@ -320,14 +320,18 @@ class RadioTrackingService(
                 }
             } else {
                 // Normal tracking - detect if user started tuning
-                val tuningResult = detectSplitModeTuning(
-                    radio, lastSetTxFreq, lastSetRxFreq, txBaseFreq
-                )
-                if (tuningResult != null) {
-                    tuningRadio = tuningResult.tuningRadio
-                    lastReadFreq = tuningResult.lastReadFreq
-                    stableCount = 0
-                    currentVfo = tuningResult.currentVfo
+                // Only check for tuning when not transmitting (can't switch VFO during TX)
+                val isPttActive = (radio as? Ic705Controller)?.readPttState() ?: false
+                if (!isPttActive) {
+                    val tuningResult = detectSplitModeTuning(
+                        radio, lastSetTxFreq, lastSetRxFreq, txBaseFreq
+                    )
+                    if (tuningResult != null) {
+                        tuningRadio = tuningResult.tuningRadio
+                        lastReadFreq = tuningResult.lastReadFreq
+                        stableCount = 0
+                        currentVfo = tuningResult.currentVfo
+                    }
                 }
             }
 
