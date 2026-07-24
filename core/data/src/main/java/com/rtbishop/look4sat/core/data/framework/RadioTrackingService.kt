@@ -60,30 +60,59 @@ class RadioTrackingService(
         val rcSettings = settingsRepo.radioControlSettings.value
         val txAddr = rcSettings.txRadioAddress
         val rxAddr = rcSettings.rxRadioAddress
+        val radioModel = rcSettings.radioModel
+        val splitMode = rcSettings.splitMode
+        val isIcom = radioModel.startsWith("Icom")
 
-        Log.i(tag, "Connecting TX=$txAddr RX=$rxAddr")
+        Log.i(tag, "Connecting model=$radioModel splitMode=$splitMode TX=$txAddr RX=$rxAddr")
 
-        if (txAddr.isBlank() && rxAddr.isBlank()) {
+        // Validate addresses
+        if (splitMode && txAddr.isBlank()) {
+            _state.update { it.copy(errorMessage = "No radio address configured for split mode") }
+            return
+        }
+        if (!splitMode && txAddr.isBlank() && rxAddr.isBlank()) {
             _state.update { it.copy(errorMessage = "No radio addresses configured in Settings") }
             return
         }
 
-        val tx = Ft817Controller(bluetoothManager, txAddr)
-        val rx = Ft817Controller(bluetoothManager, rxAddr)
+        // Create controllers based on radio model
+        val tx: IRadioController? = if (txAddr.isNotBlank()) {
+            when {
+                isIcom -> Ic705Controller(bluetoothManager, txAddr, splitMode)
+                else -> Ft817Controller(bluetoothManager, txAddr)
+            }
+        } else null
+
+        val rx: IRadioController? = if (!splitMode && rxAddr.isNotBlank()) {
+            when {
+                isIcom -> Ic705Controller(bluetoothManager, rxAddr, splitMode = false)
+                else -> Ft817Controller(bluetoothManager, rxAddr)
+            }
+        } else null
+
         txController = tx
         rxController = rx
 
         _state.update { it.copy(errorMessage = null) }
-        val txOk = if (txAddr.isNotBlank()) tx.connect() else false
-        val rxOk = if (rxAddr.isNotBlank()) rx.connect() else false
+        
+        // Connect radios
+        val txOk = tx?.connect() ?: false
+        val rxOk = if (splitMode) {
+            false // No RX radio in split mode
+        } else {
+            rx?.connect() ?: false
+        }
+
         _state.update {
             it.copy(
                 txConnected = txOk,
                 rxConnected = rxOk,
                 errorMessage = when {
-                    !txOk && !rxOk -> "Could not connect to TX and RX radios"
-                    !txOk -> "Could not connect to TX radio ($txAddr)"
-                    !rxOk -> "Could not connect to RX radio ($rxAddr)"
+                    splitMode && !txOk -> "Could not connect to radio ($txAddr)"
+                    !splitMode && !txOk && !rxOk -> "Could not connect to TX and RX radios"
+                    !splitMode && !txOk -> "Could not connect to TX radio ($txAddr)"
+                    !splitMode && !rxOk -> "Could not connect to RX radio ($rxAddr)"
                     else -> null
                 }
             )
@@ -116,6 +145,10 @@ class RadioTrackingService(
         }
         trackingJob?.cancel()
         trackingJob = appScope.launch {
+            val rcSettings = settingsRepo.radioControlSettings.value
+            val splitMode = rcSettings.splitMode
+            val isIcom = rcSettings.radioModel.startsWith("Icom")
+            
             // Set modes on both radios at tracking start
             val tx = txController
             val rx = rxController
@@ -124,21 +157,73 @@ class RadioTrackingService(
                 ?: transponder.uplinkMode?.let {
                     TransponderMapper.mapUplinkModeToDownlinkMode(it, transponder.isInverted)
                 }
-            if (tx != null && tx.isConnected && txMode != null) {
-                tx.setMode(txMode)
-                Log.i(tag, "TX mode set to $txMode")
+
+            // Compute initial frequencies for split mode setup
+            val txBaseFreq = txBaseFreqHz ?: when {
+                transponder.uplinkLow != null && transponder.uplinkHigh != null ->
+                    (transponder.uplinkLow!! + transponder.uplinkHigh!!) / 2
+                transponder.uplinkLow != null -> transponder.uplinkLow!!
+                else -> null
             }
-            if (rx != null && rx.isConnected && rxMode != null) {
-                rx.setMode(rxMode)
-                Log.i(tag, "RX mode set to $rxMode")
+            val rxBaseFreq = if (txBaseFreq != null) {
+                TransponderMapper.mapUplinkToDownlink(txBaseFreq, transponder)
+            } else {
+                transponder.downlinkLow
             }
-            // Set CTCSS if FM
-            if (txMode?.uppercase() == "FM") {
-                _state.value.ctcssTone?.let { tone ->
-                    tx?.setCtcssTone(tone)
-                    tx?.setCtcssMode(true)
+
+            // Split mode setup (Icom only)
+            if (splitMode && isIcom && tx is Ic705Controller) {
+                Log.i(tag, "Setting up split mode on IC-705")
+                
+                // Enable split
+                tx.setSplit(true)
+                
+                // Set VFO A (main/RX) - downlink
+                if (rxMode != null && rxBaseFreq != null) {
+                    tx.setVfo("A")
+                    tx.setMode(rxMode)
+                    tx.setFrequency(rxBaseFreq)
+                    Log.i(tag, "VFO A (RX): mode=$rxMode freq=$rxBaseFreq")
+                }
+                
+                // Set VFO B (sub/TX) - uplink
+                if (txMode != null && txBaseFreq != null) {
+                    tx.setVfo("B")
+                    tx.setMode(txMode)
+                    tx.setFrequency(txBaseFreq)
+                    Log.i(tag, "VFO B (TX): mode=$txMode freq=$txBaseFreq")
+                    
+                    // Set CTCSS if FM
+                    if (txMode.uppercase() == "FM") {
+                        _state.value.ctcssTone?.let { tone ->
+                            tx.setCtcssTone(tone)
+                            Log.i(tag, "CTCSS tone set to $tone Hz")
+                        }
+                    }
+                }
+                
+                // Return to VFO A (main)
+                tx.setVfo("A")
+                Log.i(tag, "Split mode setup complete, returned to VFO A")
+            } else {
+                // Dual radio mode setup (existing behavior)
+                if (tx != null && tx.isConnected && txMode != null) {
+                    tx.setMode(txMode)
+                    Log.i(tag, "TX mode set to $txMode")
+                }
+                if (rx != null && rx.isConnected && rxMode != null) {
+                    rx.setMode(rxMode)
+                    Log.i(tag, "RX mode set to $rxMode")
+                }
+                // Set CTCSS if FM
+                if (txMode?.uppercase() == "FM") {
+                    _state.value.ctcssTone?.let { tone ->
+                        tx?.setCtcssTone(tone)
+                        tx?.setCtcssMode(true)
+                    }
                 }
             }
+            
             _state.update { it.copy(txMode = txMode, rxMode = rxMode) }
 
             var lastSetTxFreq = 0.0
@@ -164,7 +249,8 @@ class RadioTrackingService(
                 val c = com.rtbishop.look4sat.core.domain.predict.SPEED_OF_LIGHT
                 val v = pos.distanceRate * 1000.0
 
-                if (tuningRadio.isNotEmpty()) {
+                // Skip dial feedback in split mode (one radio, can't read while tracking)
+                if (!splitMode && tuningRadio.isNotEmpty()) {
                     // --- User is tuning: keep reading, wait for stabilization ---
                     val radio = if (tuningRadio == "tx") tx else rx
                     if (radio != null && radio.isConnected) {
@@ -202,8 +288,8 @@ class RadioTrackingService(
                             }
                         }
                     }
-                } else {
-                    // --- Normal tracking: read, detect changes, command ---
+                } else if (!splitMode) {
+                    // --- Normal tracking: read, detect changes, command (dual radio mode only) ---
 
                     // TX dial feedback
                     if (hasUplink && tx != null && tx.isConnected && lastSetTxFreq > 0.0) {
@@ -245,13 +331,29 @@ class RadioTrackingService(
 
                 // Command radios (only when not tuning)
                 if (tuningRadio.isEmpty()) {
-                    if (tx != null && tx.isConnected && txRadioFreq != null) {
-                        tx.setFrequency(txRadioFreq)
-                        lastSetTxFreq = txRadioFreq.toDouble()
-                    }
-                    if (rx != null && rx.isConnected && rxRadioFreq != null) {
-                        rx.setFrequency(rxRadioFreq)
-                        lastSetRxFreq = rxRadioFreq.toDouble()
+                    if (splitMode && isIcom && tx is Ic705Controller) {
+                        // Split mode: use PTT status to determine which frequency to set
+                        val pttActive = tx.readPttStatus() ?: false
+                        
+                        if (pttActive && txRadioFreq != null) {
+                            // PTT ON - radio switched to VFO B (TX), update TX frequency
+                            tx.setFrequencyToCurrentVfo(txRadioFreq)
+                            lastSetTxFreq = txRadioFreq.toDouble()
+                        } else if (!pttActive && rxRadioFreq != null) {
+                            // PTT OFF - radio on VFO A (RX), update RX frequency
+                            tx.setFrequencyToCurrentVfo(rxRadioFreq)
+                            lastSetRxFreq = rxRadioFreq.toDouble()
+                        }
+                    } else {
+                        // Dual radio mode: update both radios
+                        if (tx != null && tx.isConnected && txRadioFreq != null) {
+                            tx.setFrequency(txRadioFreq)
+                            lastSetTxFreq = txRadioFreq.toDouble()
+                        }
+                        if (rx != null && rx.isConnected && rxRadioFreq != null) {
+                            rx.setFrequency(rxRadioFreq)
+                            lastSetRxFreq = rxRadioFreq.toDouble()
+                        }
                     }
                 }
 

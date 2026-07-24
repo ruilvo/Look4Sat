@@ -383,6 +383,7 @@ class SettingsRepo(
     private val keyTxRadioName = "txRadioName"
     private val keyRxRadioName = "rxRadioName"
     private val keyRadioBaudRate = "radioBaudRate"
+    private val keyRadioSplitMode = "radioSplitMode"
 
     private val _radioControlSettings = MutableStateFlow(getRadioControlSettings())
     override val radioControlSettings: StateFlow<RadioControlSettings> = _radioControlSettings
@@ -396,6 +397,7 @@ class SettingsRepo(
             putString(keyTxRadioName, settings.txRadioName)
             putString(keyRxRadioName, settings.rxRadioName)
             putInt(keyRadioBaudRate, settings.baudRate)
+            putBoolean(keyRadioSplitMode, settings.splitMode)
         }
         _radioControlSettings.value = settings
     }
@@ -407,7 +409,8 @@ class SettingsRepo(
         rxRadioAddress = preferences.getString(keyRxRadioAddress, null) ?: "",
         txRadioName = preferences.getString(keyTxRadioName, null) ?: "TX Radio",
         rxRadioName = preferences.getString(keyRxRadioName, null) ?: "RX Radio",
-        baudRate = preferences.getInt(keyRadioBaudRate, 4800)
+        baudRate = preferences.getInt(keyRadioBaudRate, 4800),
+        splitMode = preferences.getBoolean(keyRadioSplitMode, false)
     )
     //endregion
 }

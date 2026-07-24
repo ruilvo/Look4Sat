@@ -446,9 +446,9 @@ fun RadioControlDialog(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val padding = LocalSpacing.current.large
-    val baudRates = listOf(4800, 9600, 38400)
     val enabled = rememberSaveable { mutableStateOf(initialSettings.enabled) }
     val radioModel = rememberSaveable { mutableStateOf(initialSettings.radioModel) }
+    val splitMode = rememberSaveable { mutableStateOf(initialSettings.splitMode) }
     val txAddress = rememberSaveable { mutableStateOf(initialSettings.txRadioAddress) }
     val rxAddress = rememberSaveable { mutableStateOf(initialSettings.rxRadioAddress) }
     val txName = rememberSaveable { mutableStateOf(initialSettings.txRadioName) }
@@ -465,6 +465,12 @@ fun RadioControlDialog(
         }
     }
 
+    val baudRates = if (radioModel.value.startsWith("Icom")) {
+        listOf(4800, 9600, 19200, 38400, 57600, 115200)
+    } else {
+        listOf(4800, 9600, 19200, 38400)
+    }
+
     val onAccept = {
         onSave(
             RadioControlSettings(
@@ -474,7 +480,8 @@ fun RadioControlDialog(
                 rxRadioAddress = rxAddress.value,
                 txRadioName = txName.value,
                 rxRadioName = rxName.value,
-                baudRate = baudRate.intValue
+                baudRate = baudRate.intValue,
+                splitMode = splitMode.value
             )
         )
         onDismiss()
@@ -513,32 +520,64 @@ fun RadioControlDialog(
             }
             Spacer(modifier = Modifier.height(6.dp))
 
+            // Split mode toggle (only for Icom)
+            if (radioModel.value.startsWith("Icom")) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Split Mode (Single Radio)",
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                        )
+                        Text(
+                            "Use one radio with split operation",
+                            fontSize = 12.sp,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = splitMode.value,
+                        onCheckedChange = { splitMode.value = it },
+                        enabled = enabled.value
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+
             // TX Radio selection
-            Text("TX Radio (Uplink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+            Text(
+                if (splitMode.value && radioModel.value.startsWith("Icom")) "Radio" else "TX Radio (Uplink)",
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+            )
             if (txAddress.value.isNotBlank()) {
                 Text("${txName.value} - ${txAddress.value}", fontSize = 13.sp)
             }
             CardButton(
                 onClick = { selectingFor.value = "tx" },
-                text = "Select TX Device",
+                text = if (splitMode.value && radioModel.value.startsWith("Icom")) "Select Radio Device" else "Select TX Device",
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            // RX Radio selection
-            Text("RX Radio (Downlink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-            if (rxAddress.value.isNotBlank()) {
-                Text("${rxName.value} - ${rxAddress.value}", fontSize = 13.sp)
+            // RX Radio selection (hide in split mode)
+            if (!splitMode.value || !radioModel.value.startsWith("Icom")) {
+                Text("RX Radio (Downlink)", fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                if (rxAddress.value.isNotBlank()) {
+                    Text("${rxName.value} - ${rxAddress.value}", fontSize = 13.sp)
+                }
+                CardButton(
+                    onClick = { selectingFor.value = "rx" },
+                    text = "Select RX Device",
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(6.dp))
             }
-            CardButton(
-                onClick = { selectingFor.value = "rx" },
-                text = "Select RX Device",
-                modifier = Modifier.fillMaxWidth()
-            )
 
             // Paired devices list (shown when selecting)
             if (selectingFor.value.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Paired Bluetooth Devices:",
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
@@ -573,9 +612,9 @@ fun RadioControlDialog(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,

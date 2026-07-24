@@ -38,4 +38,16 @@ interface IRadioController {
     suspend fun pttOn(): Boolean
 
     suspend fun pttOff(): Boolean
+
+    /**
+     * Read PTT status from radio (Icom-specific).
+     * Returns true if PTT is active, false if not, null if not supported or error.
+     */
+    suspend fun readPttStatus(): Boolean? = null
+
+    /**
+     * Set frequency to the currently active VFO (Icom split mode).
+     * For Yaesu radios, falls back to regular setFrequency().
+     */
+    suspend fun setFrequencyToCurrentVfo(frequencyHz: Long): Boolean = setFrequency(frequencyHz)
 }
