@@ -150,51 +150,97 @@ class RadioTrackingService(
                     TransponderMapper.mapUplinkModeToDownlinkMode(it, transponder.isInverted)
                 }
 
+            // Compute initial frequencies for band/mode setup
+            val initialTxBaseFreq = txBaseFreqHz ?: transponder.uplinkLow
+            val initialRxBaseFreq = if (initialTxBaseFreq != null) {
+                TransponderMapper.mapUplinkToDownlink(initialTxBaseFreq, transponder)
+            } else {
+                transponder.downlinkLow
+            }
+
             // Initialize split mode if enabled
             if (useSplit && tx != null && tx.isConnected) {
                 // Disable split temporarily for setup
                 tx.setSplit(false)
-                
-                // Set VFO-A for RX
+                delay(50)
+
+                // Set VFO-A for RX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(50)
+                if (initialRxBaseFreq != null) {
+                    tx.setFrequency(initialRxBaseFreq)
+                    delay(50)
+                    Log.i(tag, "VFO-A (RX) frequency set to $initialRxBaseFreq Hz")
+                }
                 if (rxMode != null) {
                     tx.setMode(rxMode)
+                    delay(50)
                     Log.i(tag, "VFO-A (RX) mode set to $rxMode")
                 }
-                
-                // Set VFO-B for TX
+
+                // Set VFO-B for TX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_B)
+                delay(50)
+                if (initialTxBaseFreq != null) {
+                    tx.setFrequency(initialTxBaseFreq)
+                    delay(50)
+                    Log.i(tag, "VFO-B (TX) frequency set to $initialTxBaseFreq Hz")
+                }
                 if (txMode != null) {
                     tx.setMode(txMode)
+                    delay(50)
                     Log.i(tag, "VFO-B (TX) mode set to $txMode")
                 }
-                
+
                 // Set CTCSS on VFO-B if FM
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx.setCtcssTone(tone)
+                        delay(50)
                         tx.setCtcssMode(true)
+                        delay(50)
                     }
                 }
-                
-                // Enable split operation
+
+                // Return to VFO-A (RX) and enable split operation
+                tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(50)
                 tx.setSplit(true)
+                delay(50)
                 Log.i(tag, "Split mode enabled")
             } else {
-                // Dual radio mode - set modes on separate radios
-                if (tx != null && tx.isConnected && txMode != null) {
-                    tx.setMode(txMode)
-                    Log.i(tag, "TX mode set to $txMode")
+                // Dual radio mode - set frequencies first, then modes
+                if (tx != null && tx.isConnected) {
+                    if (initialTxBaseFreq != null) {
+                        tx.setFrequency(initialTxBaseFreq)
+                        delay(50)
+                        Log.i(tag, "TX frequency set to $initialTxBaseFreq Hz")
+                    }
+                    if (txMode != null) {
+                        tx.setMode(txMode)
+                        delay(50)
+                        Log.i(tag, "TX mode set to $txMode")
+                    }
                 }
-                if (rx != null && rx.isConnected && rxMode != null) {
-                    rx.setMode(rxMode)
-                    Log.i(tag, "RX mode set to $rxMode")
+                if (rx != null && rx.isConnected) {
+                    if (initialRxBaseFreq != null) {
+                        rx.setFrequency(initialRxBaseFreq)
+                        delay(50)
+                        Log.i(tag, "RX frequency set to $initialRxBaseFreq Hz")
+                    }
+                    if (rxMode != null) {
+                        rx.setMode(rxMode)
+                        delay(50)
+                        Log.i(tag, "RX mode set to $rxMode")
+                    }
                 }
                 // Set CTCSS if FM
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx?.setCtcssTone(tone)
+                        delay(50)
                         tx?.setCtcssMode(true)
+                        delay(50)
                     }
                 }
             }
@@ -413,29 +459,6 @@ class RadioTrackingService(
             }
         }
     }
-                    }
-                    if (rx != null && rx.isConnected && rxRadioFreq != null) {
-                        rx.setFrequency(rxRadioFreq)
-                        lastSetRxFreq = rxRadioFreq.toDouble()
-                    }
-                }
-
-                _state.update {
-                    it.copy(
-                        txConnected = tx?.isConnected ?: false,
-                        rxConnected = rx?.isConnected ?: false,
-                        txFrequencyHz = txRadioFreq,
-                        rxFrequencyHz = rxRadioFreq,
-                        azimuth = Math.toDegrees(pos.azimuth),
-                        elevation = Math.toDegrees(pos.elevation),
-                        distance = pos.distance
-                    )
-                }
-
-                delay(1000)
-            }
-        }
-    }
 
     override fun stopTracking() {
         trackingJob?.cancel()
@@ -444,23 +467,6 @@ class RadioTrackingService(
     }
 
     override fun setTransponder(transponder: SatRadio) {
-        appScope.launch {
-            val tx = txController
-            val rx = rxController
-            transponder.uplinkMode?.let { tx?.setMode(it) }
-            val rxMode = transponder.downlinkMode
-                ?: transponder.uplinkMode?.let {
-                    TransponderMapper.mapUplinkModeToDownlinkMode(it, transponder.isInverted)
-                }
-            rxMode?.let { rx?.setMode(it) }
-
-            if (transponder.uplinkMode?.uppercase() == "FM") {
-                _state.value.ctcssTone?.let { tone ->
-                    tx?.setCtcssTone(tone)
-                    tx?.setCtcssMode(true)
-                }
-            }
-        }
         val txCenter = when {
             transponder.uplinkLow != null && transponder.uplinkHigh != null ->
                 (transponder.uplinkLow!! + transponder.uplinkHigh!!) / 2
@@ -474,6 +480,94 @@ class RadioTrackingService(
             // Downlink-only transponder (beacon etc.) - use downlink directly
             transponder.downlinkLow
         }
+
+        appScope.launch {
+            val tx = txController
+            val rx = rxController
+            val useSplit = settingsRepo.radioControlSettings.value.useSplitMode
+            val txMode = transponder.uplinkMode
+            val rxMode = transponder.downlinkMode
+                ?: transponder.uplinkMode?.let {
+                    TransponderMapper.mapUplinkModeToDownlinkMode(it, transponder.isInverted)
+                }
+
+            // Set frequencies first, then modes (radio needs to be on correct band)
+            if (useSplit && tx != null && tx.isConnected) {
+                // Split mode: configure both VFOs
+                tx.setSplit(false)
+                delay(50)
+
+                // VFO-A (RX)
+                tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(50)
+                rxNominal?.let {
+                    tx.setFrequency(it)
+                    delay(50)
+                }
+                rxMode?.let {
+                    tx.setMode(it)
+                    delay(50)
+                }
+
+                // VFO-B (TX)
+                tx.setVfo(IRadioController.Vfo.VFO_B)
+                delay(50)
+                txCenter?.let {
+                    tx.setFrequency(it)
+                    delay(50)
+                }
+                txMode?.let {
+                    tx.setMode(it)
+                    delay(50)
+                }
+
+                if (txMode?.uppercase() == "FM") {
+                    _state.value.ctcssTone?.let { tone ->
+                        tx.setCtcssTone(tone)
+                        delay(50)
+                        tx.setCtcssMode(true)
+                        delay(50)
+                    }
+                }
+
+                tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(50)
+                tx.setSplit(true)
+                delay(50)
+            } else {
+                // Dual radio mode
+                if (tx != null && tx.isConnected) {
+                    txCenter?.let {
+                        tx.setFrequency(it)
+                        delay(50)
+                    }
+                    txMode?.let {
+                        tx.setMode(it)
+                        delay(50)
+                    }
+                }
+                if (rx != null && rx.isConnected) {
+                    rxNominal?.let {
+                        rx.setFrequency(it)
+                        delay(50)
+                    }
+                    rxMode?.let {
+                        rx.setMode(it)
+                        delay(50)
+                    }
+                }
+
+                if (txMode?.uppercase() == "FM") {
+                    _state.value.ctcssTone?.let { tone ->
+                        tx?.setCtcssTone(tone)
+                        delay(50)
+                        tx?.setCtcssMode(true)
+                        delay(50)
+                    }
+                }
+            }
+        }
+
         _state.update {
             it.copy(
                 selectedTransponder = transponder,
@@ -513,8 +607,30 @@ class RadioTrackingService(
 
     override fun setMode(txMode: String, rxMode: String) {
         appScope.launch {
-            txController?.setMode(txMode)
-            rxController?.setMode(rxMode)
+            val tx = txController
+            val rx = rxController
+            val useSplit = settingsRepo.radioControlSettings.value.useSplitMode
+
+            if (useSplit && tx != null && tx.isConnected) {
+                // Split mode: set modes on both VFOs
+                tx.setVfo(IRadioController.Vfo.VFO_A)
+                delay(50)
+                tx.setMode(rxMode)
+                delay(50)
+
+                tx.setVfo(IRadioController.Vfo.VFO_B)
+                delay(50)
+                tx.setMode(txMode)
+                delay(50)
+
+                // Return to VFO-A
+                tx.setVfo(IRadioController.Vfo.VFO_A)
+            } else {
+                // Dual radio mode
+                tx?.setMode(txMode)
+                delay(50)
+                rx?.setMode(rxMode)
+            }
         }
         _state.update { it.copy(txMode = txMode, rxMode = rxMode) }
     }
