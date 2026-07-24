@@ -114,7 +114,7 @@ object Ic705CivProtocol {
             val idx = 10 - (i + 1) * 2
             val low = digits[idx] - '0'
             val high = digits[idx + 1] - '0'
-            bcd[i] = ((high shl 4) or low).toByte()
+            bcd[i] = ((low shl 4) or high).toByte()
         }
         return bcd
     }
