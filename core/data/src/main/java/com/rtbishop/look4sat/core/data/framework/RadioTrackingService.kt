@@ -282,11 +282,6 @@ class RadioTrackingService(
     private suspend fun runSplitModeTracking(radio: IRadioController?) {
         if (radio == null || !radio.isConnected || radio !is Ic705Controller) return
         
-        var lastSetTxFreq = 0.0
-        var lastSetRxFreq = 0.0
-        var currentVfo = IRadioController.Vfo.VFO_A
-        var lastPttState = false
-
         while (coroutineContext.isActive) {
             val currentState = _state.value
             if (!currentState.isActive) break
@@ -308,31 +303,25 @@ class RadioTrackingService(
             }
             val rxRadioFreq = rxBaseFreq?.let { pos.getDownlinkFreq(it) }
 
-            // Read PTT state
-            val isPttActive = radio.readPttState() ?: false
+            // Read which VFO is currently active
+            val currentVfo = radio.readCurrentVfo()
             
-            // Determine which VFO and frequency we should be using
-            val targetVfo = if (isPttActive) IRadioController.Vfo.VFO_B else IRadioController.Vfo.VFO_A
-            val targetFreq = if (isPttActive) txRadioFreq else rxRadioFreq
-
-            // Switch VFO if PTT state changed
-            if (isPttActive != lastPttState) {
-                if (currentVfo != targetVfo) {
-                    radio.setVfo(targetVfo)
-                    delay(vfoSwitchDelayMs)
-                    currentVfo = targetVfo
-                    Log.i(tag, "PTT ${if (isPttActive) "ON" else "OFF"} - switched to VFO ${if (targetVfo == IRadioController.Vfo.VFO_B) "B" else "A"}")
+            // Update frequency on the currently active VFO only
+            when (currentVfo) {
+                IRadioController.Vfo.VFO_A -> {
+                    // VFO-A is active (receiving), update with downlink
+                    if (rxRadioFreq != null) {
+                        radio.setFrequencyWithoutBand(rxRadioFreq)
+                    }
                 }
-                lastPttState = isPttActive
-            }
-
-            // Update frequency on current VFO
-            if (targetFreq != null) {
-                radio.setFrequencyWithoutBand(targetFreq)
-                if (isPttActive) {
-                    lastSetTxFreq = targetFreq.toDouble()
-                } else {
-                    lastSetRxFreq = targetFreq.toDouble()
+                IRadioController.Vfo.VFO_B -> {
+                    // VFO-B is active (transmitting), update with uplink
+                    if (txRadioFreq != null) {
+                        radio.setFrequencyWithoutBand(txRadioFreq)
+                    }
+                }
+                null -> {
+                    // Could not determine current VFO, skip this iteration
                 }
             }
 

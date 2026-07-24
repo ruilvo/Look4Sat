@@ -235,7 +235,6 @@ object Ic705CivProtocol {
     /**
      * Parse CI-V response frame.
      * Expected format: [0xFE 0xFE] [FromAddr] [ToAddr] [Command] [Data...] [0xFD]
-     * Note: In responses from radio, FromAddr=Controller(E0) and ToAddr=Radio(A4) are swapped
      * Returns data payload (command and data bytes) or null if invalid.
      */
     fun parseResponse(response: ByteArray): ByteArray? {
@@ -245,8 +244,12 @@ object Ic705CivProtocol {
 
         val fromAddr = response[2]
         val toAddr = response[3]
-        // Radio sends responses with addresses swapped: From=E0 (Controller), To=A4 (IC-705)
-        if (fromAddr != ADDR_CONTROLLER || toAddr != ADDR_IC705) return null
+        
+        // Accept responses from controller (E0) or broadcast (00)
+        // Radio sends different types of responses:
+        // - ACKs from E0 (controller echo)
+        // - Data responses from 00 (broadcast) or A4 (radio itself)
+        if (toAddr != ADDR_IC705 && fromAddr != ADDR_IC705) return null
 
         return response.copyOfRange(4, response.size - 1)
     }
@@ -300,12 +303,24 @@ object Ic705CivProtocol {
     }
 
     /**
-     * Parse PTT read response.
-     * Response data: [0x1C] [PTT state]
+     * Parse PTT read response or broadcast status.
+     * Response can be:
+     * - Direct response: [0x1C] [0x00 or 0x01]
+     * - Broadcast status: [0x01] [mode] [0x00 or 0x01]
      */
     fun parsePttResponse(response: ByteArray): Boolean? {
         val data = parseResponse(response) ?: return null
-        if (data.size < 2 || data[0] != CMD_PTT) return null
-        return data[1] == PTT_ON
+        
+        // Try parsing as direct PTT response: [1C] [PTT state]
+        if (data.size >= 2 && data[0] == CMD_PTT) {
+            return data[1] == PTT_ON
+        }
+        
+        // Try parsing as broadcast status: [01] [mode] [PTT state]
+        if (data.size >= 3 && data[0] == 0x01.toByte()) {
+            return data[2] == 0x01.toByte()
+        }
+        
+        return null
     }
 }

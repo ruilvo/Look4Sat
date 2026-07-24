@@ -165,9 +165,28 @@ class Ic705Controller(
         ioMutex.withLock {
             val sent = sendCommand(Ic705CivProtocol.buildReadPttCommand())
             if (!sent) return@withContext null
+            
             delay(responseWaitMs.milliseconds)
-            val response = readCivResponse() ?: return@withContext null
-            Ic705CivProtocol.parsePttResponse(response)
+            
+            // Read responses until we get PTT data or timeout
+            val startTime = System.currentTimeMillis()
+            val timeout = 500L
+            
+            while (System.currentTimeMillis() - startTime < timeout) {
+                val response = readCivResponse() ?: break
+                val pttState = Ic705CivProtocol.parsePttResponse(response)
+                if (pttState != null) {
+                    return@withContext pttState
+                }
+                // If we got an ACK, keep reading for broadcast message
+                if (Ic705CivProtocol.isAck(response)) {
+                    delay(50.milliseconds)
+                    continue
+                }
+                break
+            }
+            
+            return@withContext null
         }
     }
 
@@ -180,6 +199,31 @@ class Ic705Controller(
     override suspend fun pttOff(): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
             sendCommandWithAck(Ic705CivProtocol.buildSetPttCommand(false))
+        }
+    }
+
+    suspend fun readCurrentVfo(): IRadioController.Vfo? = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            // Command 0x07 with no data reads current VFO
+            val sent = sendCommand(byteArrayOf(
+                Ic705CivProtocol.PREAMBLE, Ic705CivProtocol.PREAMBLE,
+                Ic705CivProtocol.ADDR_IC705, Ic705CivProtocol.ADDR_CONTROLLER,
+                0x07, Ic705CivProtocol.POSTAMBLE
+            ))
+            if (!sent) return@withLock null
+            
+            delay(responseWaitMs.milliseconds)
+            val response = readCivResponse() ?: return@withLock null
+            val data = Ic705CivProtocol.parseResponse(response) ?: return@withLock null
+            
+            if (data.size >= 2 && data[0] == 0x07.toByte()) {
+                return@withLock when (data[1]) {
+                    Ic705CivProtocol.VFO_A -> IRadioController.Vfo.VFO_A
+                    Ic705CivProtocol.VFO_B -> IRadioController.Vfo.VFO_B
+                    else -> null
+                }
+            }
+            null
         }
     }
 
@@ -202,6 +246,7 @@ class Ic705Controller(
     private suspend fun sendCommand(bytes: ByteArray): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                Log.d(tag, "TX: ${bytes.joinToString(" ") { "%02X".format(it) }}")
                 outputStream?.write(bytes) ?: return@withContext false
                 outputStream?.flush()
                 true
@@ -261,7 +306,9 @@ class Ic705Controller(
             buffer.add(byte.toByte())
 
             if (byte.toByte() == Ic705CivProtocol.POSTAMBLE) {
-                return buffer.toByteArray()
+                val response = buffer.toByteArray()
+                Log.d(tag, "RX: ${response.joinToString(" ") { "%02X".format(it) }}")
+                return response
             }
         }
 
