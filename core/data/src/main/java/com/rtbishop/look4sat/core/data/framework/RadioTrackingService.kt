@@ -162,33 +162,33 @@ class RadioTrackingService(
             if (useSplit && tx != null && tx.isConnected) {
                 // Disable split temporarily for setup
                 tx.setSplit(false)
-                delay(50)
+                delay(100)
 
                 // Set VFO-A for RX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(50)
+                delay(100)
                 if (initialRxBaseFreq != null) {
                     tx.setFrequency(initialRxBaseFreq)
-                    delay(50)
+                    delay(200)
                     Log.i(tag, "VFO-A (RX) frequency set to $initialRxBaseFreq Hz")
                 }
                 if (rxMode != null) {
                     tx.setMode(rxMode)
-                    delay(50)
+                    delay(200)
                     Log.i(tag, "VFO-A (RX) mode set to $rxMode")
                 }
 
                 // Set VFO-B for TX: frequency first (to set band), then mode
                 tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(50)
+                delay(100)
                 if (initialTxBaseFreq != null) {
                     tx.setFrequency(initialTxBaseFreq)
-                    delay(50)
+                    delay(200)
                     Log.i(tag, "VFO-B (TX) frequency set to $initialTxBaseFreq Hz")
                 }
                 if (txMode != null) {
                     tx.setMode(txMode)
-                    delay(50)
+                    delay(200)
                     Log.i(tag, "VFO-B (TX) mode set to $txMode")
                 }
 
@@ -196,41 +196,41 @@ class RadioTrackingService(
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx.setCtcssTone(tone)
-                        delay(50)
+                        delay(100)
                         tx.setCtcssMode(true)
-                        delay(50)
+                        delay(100)
                     }
                 }
 
                 // Return to VFO-A (RX) and enable split operation
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(50)
+                delay(100)
                 tx.setSplit(true)
-                delay(50)
+                delay(100)
                 Log.i(tag, "Split mode enabled")
             } else {
                 // Dual radio mode - set frequencies first, then modes
                 if (tx != null && tx.isConnected) {
                     if (initialTxBaseFreq != null) {
                         tx.setFrequency(initialTxBaseFreq)
-                        delay(50)
+                        delay(200)
                         Log.i(tag, "TX frequency set to $initialTxBaseFreq Hz")
                     }
                     if (txMode != null) {
                         tx.setMode(txMode)
-                        delay(50)
+                        delay(200)
                         Log.i(tag, "TX mode set to $txMode")
                     }
                 }
                 if (rx != null && rx.isConnected) {
                     if (initialRxBaseFreq != null) {
                         rx.setFrequency(initialRxBaseFreq)
-                        delay(50)
+                        delay(200)
                         Log.i(tag, "RX frequency set to $initialRxBaseFreq Hz")
                     }
                     if (rxMode != null) {
                         rx.setMode(rxMode)
-                        delay(50)
+                        delay(200)
                         Log.i(tag, "RX mode set to $rxMode")
                     }
                 }
@@ -238,9 +238,9 @@ class RadioTrackingService(
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx?.setCtcssTone(tone)
-                        delay(50)
+                        delay(100)
                         tx?.setCtcssMode(true)
-                        delay(50)
+                        delay(100)
                     }
                 }
             }
@@ -495,74 +495,74 @@ class RadioTrackingService(
             if (useSplit && tx != null && tx.isConnected) {
                 // Split mode: configure both VFOs
                 tx.setSplit(false)
-                delay(50)
+                delay(100)
 
                 // VFO-A (RX)
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(50)
+                delay(100)
                 rxNominal?.let {
                     tx.setFrequency(it)
-                    delay(50)
+                    delay(200)
                 }
                 rxMode?.let {
                     tx.setMode(it)
-                    delay(50)
+                    delay(200)
                 }
 
                 // VFO-B (TX)
                 tx.setVfo(IRadioController.Vfo.VFO_B)
-                delay(50)
+                delay(100)
                 txCenter?.let {
                     tx.setFrequency(it)
-                    delay(50)
+                    delay(200)
                 }
                 txMode?.let {
                     tx.setMode(it)
-                    delay(50)
+                    delay(200)
                 }
 
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx.setCtcssTone(tone)
-                        delay(50)
+                        delay(100)
                         tx.setCtcssMode(true)
-                        delay(50)
+                        delay(100)
                     }
                 }
 
                 tx.setVfo(IRadioController.Vfo.VFO_A)
-                delay(50)
+                delay(100)
                 tx.setSplit(true)
-                delay(50)
+                delay(100)
             } else {
                 // Dual radio mode
                 if (tx != null && tx.isConnected) {
                     txCenter?.let {
                         tx.setFrequency(it)
-                        delay(50)
+                        delay(200)
                     }
                     txMode?.let {
                         tx.setMode(it)
-                        delay(50)
+                        delay(200)
                     }
                 }
                 if (rx != null && rx.isConnected) {
                     rxNominal?.let {
                         rx.setFrequency(it)
-                        delay(50)
+                        delay(200)
                     }
                     rxMode?.let {
                         rx.setMode(it)
-                        delay(50)
+                        delay(200)
                     }
                 }
 
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx?.setCtcssTone(tone)
-                        delay(50)
+                        delay(100)
                         tx?.setCtcssMode(true)
-                        delay(50)
+                        delay(100)
                     }
                 }
             }
