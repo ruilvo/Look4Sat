@@ -443,18 +443,25 @@ class RadioTrackingService(
                 // Command radios (only when not tuning)
                 if (tuningRadio.isEmpty()) {
                     if (useSplit && tx != null && tx.isConnected) {
-                        // Split mode: update both VFOs
-                        if (rxRadioFreq != null) {
-                            tx.setVfo(IRadioController.Vfo.VFO_A)
-                            delay(vfoSwitchDelayMs)
-                            tx.setFrequency(rxRadioFreq)
-                            lastSetRxFreq = rxRadioFreq.toDouble()
-                        }
-                        if (txRadioFreq != null) {
-                            tx.setVfo(IRadioController.Vfo.VFO_B)
-                            delay(vfoSwitchDelayMs)
-                            tx.setFrequency(txRadioFreq)
-                            lastSetTxFreq = txRadioFreq.toDouble()
+                        // Split mode: check PTT state and adjust appropriate VFO
+                        val isPttActive = (tx as? Ic705Controller)?.readPttState() ?: false
+                        
+                        if (isPttActive) {
+                            // Transmitting: update VFO-B (TX) only
+                            if (txRadioFreq != null) {
+                                tx.setVfo(IRadioController.Vfo.VFO_B)
+                                delay(vfoSwitchDelayMs)
+                                tx.setFrequency(txRadioFreq)
+                                lastSetTxFreq = txRadioFreq.toDouble()
+                            }
+                        } else {
+                            // Receiving: update VFO-A (RX) only
+                            if (rxRadioFreq != null) {
+                                tx.setVfo(IRadioController.Vfo.VFO_A)
+                                delay(vfoSwitchDelayMs)
+                                tx.setFrequency(rxRadioFreq)
+                                lastSetRxFreq = rxRadioFreq.toDouble()
+                            }
                         }
                     } else {
                         // Dual radio mode

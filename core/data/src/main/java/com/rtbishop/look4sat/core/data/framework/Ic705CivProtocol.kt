@@ -37,6 +37,7 @@ object Ic705CivProtocol {
     const val CMD_SELECT_VFO: Byte = 0x07
     const val CMD_SELECT_MODE: Byte = 0x08
     const val CMD_SPLIT: Byte = 0x0F
+    const val CMD_PTT: Byte = 0x1C
     const val CMD_BAND_SELECT: Byte = 0x1A
     const val CMD_CTCSS: Byte = 0x16
     const val CMD_SET_TONE: Byte = 0x1B
@@ -45,6 +46,9 @@ object Ic705CivProtocol {
     const val VFO_B: Byte = 0x01
     const val VFO_MODE: Byte = 0x00 // Operating mode: VFO
     const val MEM_MODE: Byte = 0x01 // Operating mode: Memory
+    
+    const val PTT_OFF: Byte = 0x00
+    const val PTT_ON: Byte = 0x01
     
     const val SUB_BAND_SELECT: Byte = 0x00
     
@@ -209,6 +213,15 @@ object Ic705CivProtocol {
         return buildFrame(CMD_SPLIT, sub)
     }
 
+    fun buildReadPttCommand(): ByteArray {
+        return buildFrame(CMD_PTT)
+    }
+
+    fun buildSetPttCommand(enabled: Boolean): ByteArray {
+        val state = if (enabled) PTT_ON else PTT_OFF
+        return buildFrame(CMD_PTT, state)
+    }
+
     fun buildCtcssModeCommand(enabled: Boolean): ByteArray {
         val sub = if (enabled) SUB_CTCSS_ON else SUB_CTCSS_OFF
         return buildFrame(CMD_CTCSS, sub)
@@ -284,5 +297,15 @@ object Ic705CivProtocol {
         if (data.size < 3 || data[0] != CMD_READ_MODE) return null
         val modeByte = data[1]
         return BYTE_TO_MODE[modeByte]
+    }
+
+    /**
+     * Parse PTT read response.
+     * Response data: [0x1C] [PTT state]
+     */
+    fun parsePttResponse(response: ByteArray): Boolean? {
+        val data = parseResponse(response) ?: return null
+        if (data.size < 2 || data[0] != CMD_PTT) return null
+        return data[1] == PTT_ON
     }
 }

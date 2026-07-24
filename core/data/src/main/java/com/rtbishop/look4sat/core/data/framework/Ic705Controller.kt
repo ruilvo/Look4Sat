@@ -170,12 +170,26 @@ class Ic705Controller(
         }
     }
 
+    suspend fun readPttState(): Boolean? = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            val sent = sendCommand(Ic705CivProtocol.buildReadPttCommand())
+            if (!sent) return@withContext null
+            delay(responseWaitMs.milliseconds)
+            val response = readCivResponse() ?: return@withContext null
+            Ic705CivProtocol.parsePttResponse(response)
+        }
+    }
+
     override suspend fun pttOn(): Boolean = withContext(Dispatchers.IO) {
-        true // PTT not implemented for IC-705 yet
+        ioMutex.withLock {
+            sendCommandWithAck(Ic705CivProtocol.buildSetPttCommand(true))
+        }
     }
 
     override suspend fun pttOff(): Boolean = withContext(Dispatchers.IO) {
-        true // PTT not implemented for IC-705 yet
+        ioMutex.withLock {
+            sendCommandWithAck(Ic705CivProtocol.buildSetPttCommand(false))
+        }
     }
 
     override suspend fun setVfo(vfo: IRadioController.Vfo): Boolean = withContext(Dispatchers.IO) {
