@@ -133,6 +133,16 @@ class Ic705Controller(
         }
     }
 
+    /**
+     * Set frequency without band selection (for Doppler tracking where band is already set).
+     */
+    suspend fun setFrequencyWithoutBand(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
+        ioMutex.withLock {
+            val cmd = Ic705CivProtocol.buildSetFreqCommand(frequencyHz)
+            sendCommandWithAck(cmd)
+        }
+    }
+
     override suspend fun setMode(mode: String): Boolean = withContext(Dispatchers.IO) {
         val cmd = Ic705CivProtocol.buildSetModeCommand(mode) ?: return@withContext false
         ioMutex.withLock { sendCommandWithAck(cmd) }
