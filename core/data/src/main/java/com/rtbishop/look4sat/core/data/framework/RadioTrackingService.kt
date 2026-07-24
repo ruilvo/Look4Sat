@@ -307,14 +307,9 @@ class RadioTrackingService(
 
             val pos = satelliteRepo.getPosition(satPass.orbitalObject, stationPos, timeNow)
 
-            // Compute Doppler-corrected frequencies
-            val txRadioFreq = txBaseFreq?.let { pos.getUplinkFreq(it) }
-            val rxBaseFreq = if (txBaseFreq != null) {
-                TransponderMapper.mapUplinkToDownlink(txBaseFreq, xpdr)
-            } else {
-                xpdr.downlinkLow
-            }
-            val rxRadioFreq = rxBaseFreq?.let { pos.getDownlinkFreq(it) }
+            val dopplerFrequencies = computeDopplerFrequencies(pos, txBaseFreq, xpdr)
+            val txRadioFreq = dopplerFrequencies.txFrequencyHz
+            val rxRadioFreq = dopplerFrequencies.rxFrequencyHz
 
             // Read which VFO is currently active
             val currentVfo = radio.readCurrentVfo()
@@ -431,14 +426,9 @@ class RadioTrackingService(
                 }
             }
 
-            // Compute Doppler-corrected frequencies
-            val txRadioFreq = txBaseFreq?.let { pos.getUplinkFreq(it) }
-            val rxBaseFreq = if (txBaseFreq != null) {
-                TransponderMapper.mapUplinkToDownlink(txBaseFreq, xpdr)
-            } else {
-                xpdr.downlinkLow
-            }
-            val rxRadioFreq = rxBaseFreq?.let { pos.getDownlinkFreq(it) }
+            val dopplerFrequencies = computeDopplerFrequencies(pos, txBaseFreq, xpdr)
+            val txRadioFreq = dopplerFrequencies.txFrequencyHz
+            val rxRadioFreq = dopplerFrequencies.rxFrequencyHz
 
             // Update radio frequencies (only when not tuning)
             if (tuningRadio.isEmpty()) {
@@ -475,6 +465,26 @@ class RadioTrackingService(
                 distance = pos.distance
             )
         }
+    }
+
+    private data class DopplerFrequencies(
+        val txFrequencyHz: Long?,
+        val rxFrequencyHz: Long?
+    )
+
+    private fun computeDopplerFrequencies(
+        pos: com.rtbishop.look4sat.core.domain.predict.OrbitalPos,
+        txBaseFreq: Long?,
+        transponder: SatRadio
+    ): DopplerFrequencies {
+        val txFrequencyHz = txBaseFreq?.let { pos.getUplinkFreq(it) }
+        val rxBaseFreq = if (txBaseFreq != null) {
+            TransponderMapper.mapUplinkToDownlink(txBaseFreq, transponder)
+        } else {
+            transponder.downlinkLow
+        }
+        val rxFrequencyHz = rxBaseFreq?.let { pos.getDownlinkFreq(it) }
+        return DopplerFrequencies(txFrequencyHz, rxFrequencyHz)
     }
 
     override fun stopTracking() {
