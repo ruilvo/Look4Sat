@@ -222,6 +222,7 @@ object Ic705CivProtocol {
     /**
      * Parse CI-V response frame.
      * Expected format: [0xFE 0xFE] [FromAddr] [ToAddr] [Command] [Data...] [0xFD]
+     * Note: In responses from radio, FromAddr=Controller(E0) and ToAddr=Radio(A4) are swapped
      * Returns data payload (command and data bytes) or null if invalid.
      */
     fun parseResponse(response: ByteArray): ByteArray? {
@@ -231,7 +232,8 @@ object Ic705CivProtocol {
 
         val fromAddr = response[2]
         val toAddr = response[3]
-        if (fromAddr != ADDR_IC705 || toAddr != ADDR_CONTROLLER) return null
+        // Radio sends responses with addresses swapped: From=E0 (Controller), To=A4 (IC-705)
+        if (fromAddr != ADDR_CONTROLLER || toAddr != ADDR_IC705) return null
 
         return response.copyOfRange(4, response.size - 1)
     }

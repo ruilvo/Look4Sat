@@ -233,6 +233,11 @@ class Ic705Controller(
                     return@withContext true // Command sent, treat as best-effort
                 }
                 ackReadFailureCount = 0
+                
+                // Debug: log the raw response
+                val responseHex = response.joinToString(" ") { "%02X".format(it) }
+                Log.d(tag, "ACK response bytes: $responseHex")
+                
                 val isOk = Ic705CivProtocol.isAckOk(response)
                 if (!isOk) {
                     Log.w(tag, "Command returned NG or invalid ACK")
