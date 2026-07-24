@@ -45,6 +45,10 @@ class RadioTrackingService(
 
     private val tag = "RadioTracking"
     private val vfoSwitchDelayMs = 300L
+    private val frequencySetDelayMs = 200L
+    private val modeSetDelayMs = 50L
+    private val ctcssDelayMs = 100L
+    private val trackingLoopDelayMs = 1000L
     private val _state = MutableStateFlow(RadioTrackingState())
     override val state: StateFlow<RadioTrackingState> = _state
 
@@ -207,9 +211,9 @@ class RadioTrackingService(
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx.setCtcssTone(tone)
-                        delay(100)
+                        delay(ctcssDelayMs)
                         tx.setCtcssMode(true)
-                        delay(100)
+                        delay(ctcssDelayMs)
                     }
                 }
 
@@ -230,24 +234,24 @@ class RadioTrackingService(
                     
                     if (initialTxBaseFreq != null) {
                         tx.setFrequency(initialTxBaseFreq)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                         Log.i(tag, "TX frequency set to $initialTxBaseFreq Hz")
                     }
                     if (txMode != null) {
                         tx.setMode(txMode)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                         Log.i(tag, "TX mode set to $txMode")
                     }
                 }
                 if (rx != null && rx.isConnected) {
                     if (initialRxBaseFreq != null) {
                         rx.setFrequency(initialRxBaseFreq)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                         Log.i(tag, "RX frequency set to $initialRxBaseFreq Hz")
                     }
                     if (rxMode != null) {
                         rx.setMode(rxMode)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                         Log.i(tag, "RX mode set to $rxMode")
                     }
                 }
@@ -255,9 +259,9 @@ class RadioTrackingService(
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx?.setCtcssTone(tone)
-                        delay(100)
+                        delay(ctcssDelayMs)
                         tx?.setCtcssMode(true)
-                        delay(100)
+                        delay(ctcssDelayMs)
                     }
                 }
             }
@@ -477,7 +481,7 @@ class RadioTrackingService(
                     )
                 }
 
-                delay(1000)
+                delay(trackingLoopDelayMs)
             }
         }
     }
@@ -546,9 +550,9 @@ class RadioTrackingService(
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx.setCtcssTone(tone)
-                        delay(100)
+                        delay(ctcssDelayMs)
                         tx.setCtcssMode(true)
-                        delay(100)
+                        delay(ctcssDelayMs)
                     }
                 }
 
@@ -561,30 +565,30 @@ class RadioTrackingService(
                 if (tx != null && tx.isConnected) {
                     txCenter?.let {
                         tx.setFrequency(it)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                     }
                     txMode?.let {
                         tx.setMode(it)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                     }
                 }
                 if (rx != null && rx.isConnected) {
                     rxNominal?.let {
                         rx.setFrequency(it)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                     }
                     rxMode?.let {
                         rx.setMode(it)
-                        delay(200)
+                        delay(frequencySetDelayMs)
                     }
                 }
 
                 if (txMode?.uppercase() == "FM") {
                     _state.value.ctcssTone?.let { tone ->
                         tx?.setCtcssTone(tone)
-                        delay(100)
+                        delay(ctcssDelayMs)
                         tx?.setCtcssMode(true)
-                        delay(100)
+                        delay(ctcssDelayMs)
                     }
                 }
             }
@@ -638,12 +642,12 @@ class RadioTrackingService(
                 tx.setVfo(IRadioController.Vfo.VFO_A)
                 delay(vfoSwitchDelayMs)
                 tx.setMode(rxMode)
-                delay(50)
+                delay(modeSetDelayMs)
 
                 tx.setVfo(IRadioController.Vfo.VFO_B)
                 delay(vfoSwitchDelayMs)
                 tx.setMode(txMode)
-                delay(50)
+                delay(modeSetDelayMs)
 
                 // Return to VFO-A
                 tx.setVfo(IRadioController.Vfo.VFO_A)
@@ -651,7 +655,7 @@ class RadioTrackingService(
             } else {
                 // Dual radio mode
                 tx?.setMode(txMode)
-                delay(50)
+                delay(modeSetDelayMs)
                 rx?.setMode(rxMode)
             }
         }
