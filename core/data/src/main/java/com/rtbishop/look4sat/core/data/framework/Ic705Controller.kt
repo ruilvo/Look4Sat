@@ -56,6 +56,7 @@ class Ic705Controller(
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         if (isConnected) return@withContext true
         if (deviceAddress.isBlank()) return@withContext false
+        
         try {
             val device = bluetoothManager.adapter.getRemoteDevice(deviceAddress)
             val btSocket = device.createInsecureRfcommSocketToServiceRecord(sppId)
@@ -65,22 +66,17 @@ class Ic705Controller(
             inputStream = btSocket.inputStream
             ackReadFailureCount = 0
             isConnected = true
-            Log.i(tag, "Connected to $deviceAddress")
             
             // Ensure radio is in VFO mode (not memory mode)
             delay(bandSwitchDelayMs)
             ioMutex.withLock {
-                val result = sendCommandWithAck(Ic705CivProtocol.buildSelectOperatingModeCommand())
-                if (result) {
-                    Log.i(tag, "Radio set to VFO mode")
-                } else {
-                    Log.w(tag, "Failed to set VFO mode (may already be in VFO mode)")
-                }
+                sendCommandWithAck(Ic705CivProtocol.buildSelectOperatingModeCommand())
             }
             
+            Log.i(tag, "Connected to $deviceAddress")
             true
         } catch (e: Exception) {
-            Log.e(tag, "Connect error: ${e.message}")
+            Log.e(tag, "Connect failed: ${e.message}")
             isConnected = false
             false
         }
@@ -107,29 +103,15 @@ class Ic705Controller(
 
     override suspend fun setFrequency(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
-            // First, select the appropriate band for this frequency
+            // Select appropriate band for this frequency
             val band = Ic705CivProtocol.getBandForFrequency(frequencyHz)
             if (band != null) {
-                Log.d(tag, "Selecting band for $frequencyHz Hz")
-                val bandResult = sendCommandWithAck(Ic705CivProtocol.buildBandSelectCommand(band))
-                if (!bandResult) {
-                    Log.w(tag, "Band selection failed for $frequencyHz Hz")
-                }
-                delay(bandSwitchDelayMs) // Give radio time to change bands
-            } else {
-                Log.w(tag, "Frequency $frequencyHz Hz is out of band range for IC-705")
+                sendCommandWithAck(Ic705CivProtocol.buildBandSelectCommand(band))
+                delay(bandSwitchDelayMs)
             }
             
-            val cmd = Ic705CivProtocol.buildSetFreqCommand(frequencyHz)
-            val bcd = Ic705CivProtocol.encodeFrequencyBcd(frequencyHz)
-            Log.d(tag, "Setting frequency to $frequencyHz Hz, BCD=${bcd.joinToString(" ") { "%02X".format(it) }}")
-            val result = sendCommandWithAck(cmd)
-            if (result) {
-                Log.d(tag, "Frequency set successfully to $frequencyHz Hz")
-            } else {
-                Log.w(tag, "Failed to set frequency to $frequencyHz Hz")
-            }
-            result
+            // Set frequency
+            sendCommandWithAck(Ic705CivProtocol.buildSetFreqCommand(frequencyHz))
         }
     }
 
@@ -138,8 +120,7 @@ class Ic705Controller(
      */
     suspend fun setFrequencyWithoutBand(frequencyHz: Long): Boolean = withContext(Dispatchers.IO) {
         ioMutex.withLock {
-            val cmd = Ic705CivProtocol.buildSetFreqCommand(frequencyHz)
-            sendCommandWithAck(cmd)
+            sendCommandWithAck(Ic705CivProtocol.buildSetFreqCommand(frequencyHz))
         }
     }
 
@@ -208,14 +189,7 @@ class Ic705Controller(
                 IRadioController.Vfo.VFO_A -> Ic705CivProtocol.VFO_A
                 IRadioController.Vfo.VFO_B -> Ic705CivProtocol.VFO_B
             }
-            Log.d(tag, "Switching to VFO ${if (vfo == IRadioController.Vfo.VFO_A) "A" else "B"}")
-            val result = sendCommandWithAck(Ic705CivProtocol.buildSelectVfoCommand(vfoByte))
-            if (result) {
-                Log.d(tag, "VFO switch successful")
-            } else {
-                Log.w(tag, "VFO switch failed")
-            }
-            result
+            sendCommandWithAck(Ic705CivProtocol.buildSelectVfoCommand(vfoByte))
         }
     }
 
@@ -239,93 +213,58 @@ class Ic705Controller(
         }
     }
 
-    /** Send command and read CI-V ACK response (0xFB = OK, 0xFA = NG). */
     private suspend fun sendCommandWithAck(bytes: ByteArray): Boolean {
         if (!sendCommand(bytes)) return false
-        return withContext(Dispatchers.IO) {
-            try {
-                // Give radio time to process command before reading response
-                delay(responseWaitMs.milliseconds)
-                val response = readCivResponse() ?: run {
-                    ackReadFailureCount += 1
-                    Log.w(tag, "ACK read failure (${ackReadFailureCount}/$maxAckReadFailures)")
-                    if (ackReadFailureCount >= maxAckReadFailures) {
-                        Log.e(tag, "Too many ACK read errors, marking radio disconnected")
-                        isConnected = false
-                        return@withContext false
-                    }
-                    return@withContext true // Command sent, treat as best-effort
-                }
-                ackReadFailureCount = 0
-                val isOk = Ic705CivProtocol.isAckOk(response)
-                if (!isOk) {
-                    Log.w(tag, "Command returned NG or invalid ACK")
-                }
-                // Delay after processing response to avoid overwhelming the radio
-                delay(commandDelayMs.milliseconds)
-                isOk
-            } catch (e: Exception) {
-                ackReadFailureCount += 1
-                Log.w(tag, "ACK read error (${ackReadFailureCount}/$maxAckReadFailures): ${e.message}")
-                if (ackReadFailureCount >= maxAckReadFailures) {
-                    Log.e(tag, "Too many ACK read errors, marking radio disconnected")
-                    isConnected = false
-                    false
-                } else {
-                    true
-                }
+        
+        delay(responseWaitMs.milliseconds)
+        val response = readCivResponse() ?: run {
+            ackReadFailureCount++
+            if (ackReadFailureCount >= maxAckReadFailures) {
+                Log.e(tag, "Too many ACK failures, disconnecting")
+                isConnected = false
+                return false
             }
+            return true // Best-effort
         }
+        
+        ackReadFailureCount = 0
+        val isOk = Ic705CivProtocol.isAckOk(response)
+        delay(commandDelayMs.milliseconds)
+        return isOk
     }
 
-    /**
-     * Read CI-V response frame.
-     * CI-V frames: [0xFE 0xFE] [ToAddr] [FromAddr] [Command] [Data...] [0xFD]
-     * Read until 0xFD postamble or timeout.
-     */
     private suspend fun readCivResponse(): ByteArray? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val buffer = mutableListOf<Byte>()
-                val startTime = System.currentTimeMillis()
-                
-                while (buffer.size < 256) { // Max frame size safety
-                    if (System.currentTimeMillis() - startTime > responseTimeoutMs) {
-                        Log.w(tag, "Response timeout after ${buffer.size} bytes")
-                        return@withContext null
-                    }
+        val buffer = mutableListOf<Byte>()
+        val startTime = System.currentTimeMillis()
+        
+        while (buffer.size < 256) { // Max frame size
+            if (System.currentTimeMillis() - startTime > responseTimeoutMs) {
+                return null
+            }
 
-                    val available = inputStream?.available() ?: 0
-                    if (available == 0) {
-                        delay(10.milliseconds)
-                        continue
-                    }
+            val available = inputStream?.available() ?: 0
+            if (available == 0) {
+                delay(10.milliseconds)
+                continue
+            }
 
-                    val byte = inputStream?.read() ?: run {
-                        isConnected = false
-                        return@withContext null
-                    }
-                    
-                    if (byte < 0) {
-                        Log.i(tag, "Response stream closed by remote device")
-                        isConnected = false
-                        return@withContext null
-                    }
-
-                    buffer.add(byte.toByte())
-
-                    if (byte.toByte() == Ic705CivProtocol.POSTAMBLE) {
-                        return@withContext buffer.toByteArray()
-                    }
-                }
-
-                Log.w(tag, "Response exceeded max frame size")
-                null
-            } catch (e: Exception) {
-                Log.e(tag, "Read error: ${e.message}")
+            val byte = inputStream?.read() ?: run {
                 isConnected = false
-                null
+                return null
+            }
+            
+            if (byte < 0) {
+                isConnected = false
+                return null
+            }
+
+            buffer.add(byte.toByte())
+
+            if (byte.toByte() == Ic705CivProtocol.POSTAMBLE) {
+                return buffer.toByteArray()
             }
         }
+
+        return null // Max frame size exceeded
     }
 }
