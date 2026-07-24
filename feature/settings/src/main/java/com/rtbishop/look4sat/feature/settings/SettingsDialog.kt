@@ -22,6 +22,8 @@ import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -438,6 +440,7 @@ private fun OutputChannelSection(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RadioControlDialog(
     initialSettings: RadioControlSettings,
@@ -503,7 +506,10 @@ fun RadioControlDialog(
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                 color = androidx.compose.material3.MaterialTheme.colorScheme.primary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 RadioControlSettings.SUPPORTED_RADIOS.forEach { model ->
                     androidx.compose.material3.FilterChip(
                         selected = radioModel.value == model,
