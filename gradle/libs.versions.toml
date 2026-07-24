@@ -79,6 +79,7 @@ other-osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "othe
 
 test-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlin-coroutines" }
 test-junit4 = { module = "junit:junit", version.ref = "test-junit4" }
+test-kotlin = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
 androidTest-junit = { module = "androidx.test.ext:junit", version.ref = "androidTest-junit" }
 androidTest-espresso = { module = "androidx.test.espresso:espresso-core", version.ref = "androidTest-espresso" }
@@ -103,6 +104,6 @@ composeAll = ["compose-runtime", "compose-tooling", "compose-activity", "compose
 #noinspection UnusedVersionCatalogEntry
 composeDebug = ["compose-debug-manifest", "compose-debug-tooling"]
 #noinspection UnusedVersionCatalogEntry
-unitTest = ["test-coroutines", "test-junit4"]
+unitTest = ["test-coroutines", "test-junit4", "test-kotlin"]
 #noinspection UnusedVersionCatalogEntry
 androidTest = ["androidTest-junit", "androidTest-espresso"]
